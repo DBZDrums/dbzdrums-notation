@@ -10,6 +10,7 @@ This README is the documentation for library users. Other audiences have dedicat
 - [Coding agents](AGENTS.md) — repository boundaries, safe working rules, and required validation.
 - [Generative-AI use disclosure](AI_DISCLOSURE.md) — scope, accountability, and limits of AI assistance.
 - [Architecture](docs/architecture.md) — shared technical boundaries and design decisions.
+- [Release process](docs/releasing.md) — version tags, approval, and package publication.
 
 ## Install
 

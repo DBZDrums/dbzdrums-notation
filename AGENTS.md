@@ -26,6 +26,10 @@ contribution guide in [CONTRIBUTING.md](CONTRIBUTING.md) or the user-facing
   experience, not to read public documentation.
 - Do not create commits, push, change repository settings, publish a package, or create a
   release unless the user explicitly requests it.
+- [docs/releasing.md](docs/releasing.md) is the human-owned release procedure.
+  Agents may prepare its release files and run its validation only when asked;
+  never create or push a release tag, approve an environment, or publish npm
+  packages without explicit current-turn authorization.
 - Keep audience-specific documentation separate: `README.md` is for consumers,
   `CONTRIBUTING.md` is for human contributors, and this file is for agents.
 - Keep repository documentation limited to durable, public project information: library

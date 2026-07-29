@@ -44,8 +44,10 @@ boundaries described in [docs/architecture.md](docs/architecture.md).
 - Do not commit `dist/`, test reports, or other generated output; they are intentionally
   ignored and verified during packaging.
 
-Releases are performed by project maintainers. Contributors should include the appropriate
-Changeset, but must not bump versions, tag, or publish from a pull request.
+Releases are performed by project maintainers; the durable process is documented
+in [docs/releasing.md](docs/releasing.md). Contributors should include the
+appropriate Changeset, but must not bump versions, tag, or publish from a pull
+request.
 
 ## Getting help and reporting problems
 
