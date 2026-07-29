@@ -69,6 +69,14 @@ npm requires the package to exist before a trusted publisher can be configured.
 The first publication is therefore the sole bootstrap exception to the normal
 OIDC-only process:
 
+`0.1.0` is the first intended registry version for this repository. Before that
+initial publication, changesets created during pre-release development do not
+represent increments from an already published package. Update the `0.1.0`
+changelog entry and remove those accumulated changesets during release
+preparation; do not run `changeset version`, which would incorrectly promote
+the unpublished baseline. After `0.1.0` is published, use the normal changeset
+versioning flow for every release.
+
 1. Create a short-lived granular npm token with read/write access restricted to
    the `@dbzdrums` scope and the minimum expiry allowed by npm. Enable bypass
    2FA only for this one non-interactive publish.
