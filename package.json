@@ -64,7 +64,7 @@
   "devDependencies": {
     "@changesets/cli": "2.29.8",
     "@playwright/test": "1.62.0",
-    "@types/node": "24.13.3",
+    "@types/node": "26.1.2",
     "@xmldom/xmldom": "0.8.13",
     "tsup": "8.5.1",
     "typescript": "6.0.3",
