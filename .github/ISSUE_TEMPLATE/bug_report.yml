@@ -1,0 +1,27 @@
+name: Bug report
+description: Report reproducible incorrect notation, MusicXML, SVG, or package behavior.
+title: "bug: "
+body:
+  - type: markdown
+    attributes:
+      value: Thank you for helping improve the library. Do not report security issues here; see SECURITY.md.
+  - type: input
+    id: version
+    attributes:
+      label: Package version
+      description: Include the installed @dbzdrums/notation version and runtime/browser when relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include a Bar definition, code sample, and the observed output or error.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
