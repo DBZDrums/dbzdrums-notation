@@ -1,7 +1,7 @@
 {
   "name": "@dbzdrums/notation",
   "version": "0.1.0",
-  "description": "Type-safe drum-set bar notation with MusicXML and SVG output.",
+  "description": "Type-safe TypeScript library for authoring and rendering drum notation.",
   "author": "DBZDrums",
   "license": "BSD-3-Clause",
   "keywords": [
