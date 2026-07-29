@@ -104,6 +104,7 @@ export type CompilationCode =
 
 export type RenderCode =
   | "RENDER_TARGET_INVALID"
+  | "RENDER_ABORTED"
   | "OSMD_RENDER_FAILED"
   | "STAFF_LINE_COUNT_INVALID";
 
@@ -127,6 +128,8 @@ export interface MusicXmlCompileResult {
 export interface RenderOptions extends MusicXmlCompileOptions {
   /** OSMD scale; defaults to 1. */
   readonly zoom?: number;
+  /** Optional cooperative cancellation signal for browser rendering. */
+  readonly signal?: AbortSignal;
 }
 
 export interface RenderResult extends MusicXmlCompileResult {

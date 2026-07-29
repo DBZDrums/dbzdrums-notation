@@ -33,6 +33,16 @@ update browser snapshots unless the rendered notation change is intentional and 
 Keep the package independent from React and DBZDrums application types. Preserve the
 boundaries described in [docs/architecture.md](docs/architecture.md).
 
+## Standard drum techniques
+
+Treat an unqualified hit as the authored base state. In the standard kit, `normal` for
+snare and `closed` for hi-hat are accepted explicit primary techniques, but consumers do
+not need to write them; `default` is not a public technique. Each standard-kit hit has one
+primary technique at most: snare uses `normal`, `rim`, or `flam`, and hi-hat uses `closed`,
+`open`, or `pedal`. Preserve the rejection of conflicting primaries and do not introduce
+drum-technique combinations without a clear notation meaning. Custom kits may define
+ordered modifiers in addition to one primary technique.
+
 ## Changes, documentation, and releases
 
 - Add a Changeset for every user-visible API, behavior, or package change:

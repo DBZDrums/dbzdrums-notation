@@ -41,6 +41,8 @@ const { svg, dispose } = await renderBarToSvg(bar, document.querySelector("#char
 
 `renderBarToSvg()` owns and clears its target container. The target must be connected to the document and have a positive width. Call `dispose()` when the chart is no longer needed.
 
+Both SVG render functions accept an optional `signal` in `RenderOptions`. Cancellation is cooperative: it cannot interrupt synchronous OSMD work already in progress, but it prevents an obsolete result from being returned and clears the owned container at asynchronous checkpoints. An aborted render rejects with `NotationRenderError` code `"RENDER_ABORTED"`.
+
 ### Phrases
 
 Use `Phrase` for an ordered, non-empty sequence of existing `Bar` values. Each bar may use a different meter or grid resolution, but every bar must use the same drum-kit instance.
@@ -70,7 +72,13 @@ const { svg, dispose } = await renderPhraseToSvg(phrase, document.querySelector(
 - `Bar` is immutable. `add()` returns a new value.
 - `Phrase` is immutable and preserves the input bar order. It validates that its bars share one drum-kit instance.
 
-The default kit exposes `bassDrum`, `floorTom`, `snare`, `tom2`, `tom1`, `ride`, `hiHat`, and `crash`. Snare supports the mutually exclusive techniques `normal`, `flam`, and `rim`; hi-hat supports `closed`, `open`, and `pedal`.
+The default kit exposes `bassDrum`, `floorTom`, `snare`, `tom2`, `tom1`, `ride`, `hiHat`, and `crash`.
+
+### Drum techniques
+
+A hit written as a position string, such as `"2.0"`, is valid for every voice in the standard kit and uses that voice's base technique and display. In particular, an unqualified snare is normal and an unqualified hi-hat is closed. `"normal"` and `"closed"` remain accepted explicit techniques, but they are redundant for authoring; omit `articulations` for the base state. There is no public `"default"` technique — `defaultArticulations` is an internal kit-definition setting used to resolve an unqualified hit.
+
+Each standard-kit hit has at most one primary technique. Snare accepts `normal`, `rim`, or `flam`; hi-hat accepts `closed`, `open`, or `pedal`. Supplying two primary techniques for one hit, such as `rim` plus `flam`, is rejected with `ARTICULATION_CONFLICT`. The general custom-kit API also supports ordered modifier articulations alongside one primary technique, but the standard kit currently defines no modifiers.
 
 | Voice / technique | Staff display | Notehead |
 |---|---:|---|
@@ -86,7 +94,7 @@ The default kit exposes `bassDrum`, `floorTom`, `snare`, `tom2`, `tom1`, `ride`,
 | hiHat pedal | D4 | x |
 | crash | A5 | x |
 
-`flam` is emitted as a preceding slashed grace note and a normal main snare note, so it is written as `{ at: "2.0", articulations: ["flam"] }`; it is not combined with `normal` or `rim`. A custom kit is created with `defineDrumKit()` and can explicitly mark an articulation as `unsupported`. Compilation then retains the core event, emits its base visual fallback, and reports a diagnostic; `strict: true` turns that diagnostic into a `NotationCompilationError`.
+`rim` is written with an `x` notehead at C5. `flam` is emitted as a preceding slashed grace note and a normal main snare note, so it is written as `{ at: "2.0", articulations: ["flam"] }`; it is not combined with `normal` or `rim`. Hi-hat `open` uses a `circle-x` notehead at G5, while `pedal` uses an `x` notehead at D4. A custom kit is created with `defineDrumKit()` and can explicitly mark an articulation as `unsupported`. Compilation then retains the core event, emits its base visual fallback, and reports a diagnostic; `strict: true` turns that diagnostic into a `NotationCompilationError`.
 
 ## MusicXML and SVG guarantees
 

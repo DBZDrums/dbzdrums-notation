@@ -14,6 +14,11 @@ contribution guide in [CONTRIBUTING.md](CONTRIBUTING.md) or the user-facing
 - Treat the public exports in `src/index.ts`, documented README behavior, and generated
   MusicXML as compatibility-sensitive. Update user documentation and add tests when they
   change.
+- Preserve the standard-kit technique contract: an unqualified hit is the base state,
+  `normal` and `closed` are explicit but redundant primary techniques, and `default` is
+  not a public technique. Standard-kit hits allow one primary technique; custom kits may
+  additionally define ordered modifiers. Do not add combinations that lack clear
+  drum-notation meaning.
 - Prefer small, scoped changes. Do not alter generated `dist/`, Playwright reports, or
   visual snapshots unless the requested behavior intentionally changes.
 
