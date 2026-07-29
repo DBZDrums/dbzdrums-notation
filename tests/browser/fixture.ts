@@ -1,12 +1,14 @@
-import { Bar, renderBarToSvg } from "../../src/index.js";
+import { Bar, Phrase, renderBarToSvg, renderPhraseToSvg } from "../../src/index.js";
+
+type FixtureName = "straight" | "chord" | "compound" | "triplet" | "quarterGrid" | "articulations" | "longPhrase";
 
 declare global {
   interface Window {
-    renderNotationFixture: (name: "straight" | "chord" | "compound" | "triplet" | "quarterGrid" | "articulations") => Promise<string>;
+    renderNotationFixture: (name: FixtureName) => Promise<string>;
   }
 }
 
-function barFor(name: "straight" | "chord" | "compound" | "triplet" | "quarterGrid" | "articulations"): Bar {
+function barFor(name: Exclude<FixtureName, "longPhrase">): Bar {
   switch (name) {
     case "straight":
       return new Bar({
@@ -53,6 +55,15 @@ function barFor(name: "straight" | "chord" | "compound" | "triplet" | "quarterGr
 window.renderNotationFixture = async (name) => {
   const target = document.querySelector("#target");
   if (!(target instanceof HTMLElement)) throw new Error("Missing fixture target.");
-  const result = await renderBarToSvg(barFor(name), target);
+  const result = name === "longPhrase"
+    ? await renderPhraseToSvg(
+        new Phrase({
+          bars: Array.from({ length: 8 }, (_, index) =>
+            barFor(index % 2 === 0 ? "straight" : "chord"),
+          ),
+        }),
+        target,
+      )
+    : await renderBarToSvg(barFor(name), target);
   return result.musicXml;
 };

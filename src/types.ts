@@ -68,6 +68,11 @@ export interface BarDefinition<K extends DrumKit = DrumKit> {
   readonly hits?: HitMap<K>;
 }
 
+/** An ordered, non-empty sequence of bars that shares one drum kit. */
+export interface PhraseDefinition<K extends DrumKit = DrumKit> {
+  readonly bars: readonly import("./bar.js").Bar<K>[];
+}
+
 export interface BarEvent {
   readonly voice: string;
   readonly at: Position;
@@ -88,7 +93,10 @@ export type ValidationCode =
   | "UNKNOWN_ARTICULATION"
   | "ARTICULATION_CONFLICT"
   | "DUPLICATE_HIT"
-  | "INVALID_KIT";
+  | "INVALID_KIT"
+  | "INVALID_PHRASE"
+  | "EMPTY_PHRASE"
+  | "MIXED_KITS";
 
 export type CompilationCode =
   | "UNSUPPORTED_ARTICULATION_RENDERING"

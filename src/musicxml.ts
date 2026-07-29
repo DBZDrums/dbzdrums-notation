@@ -1,5 +1,6 @@
 import { Bar } from "./bar.js";
 import { NotationCompilationError } from "./errors.js";
+import { Phrase } from "./phrase.js";
 import type {
   BarEvent,
   CompilationDiagnostic,
@@ -180,6 +181,7 @@ function resolveEventDisplay(
   bar: Bar<any>,
   event: BarEvent,
   diagnostics: CompilationDiagnostic[],
+  diagnosticPrefix: string,
 ): EventDisplay {
   const voice = voiceFor(bar, event.voice);
   if (!voice) throw new Error(`Validated Bar references unknown voice '${event.voice}'.`);
@@ -194,7 +196,7 @@ function resolveEventDisplay(
       diagnostics.push({
         code: "UNSUPPORTED_ARTICULATION_RENDERING",
         message: `Articulation '${articulationId}' on '${event.voice}' has no MusicXML display mapping.`,
-        path: `events.${event.voice}.${event.at}`,
+        path: `${diagnosticPrefix}events.${event.voice}.${event.at}`,
       });
       continue;
     }
@@ -355,17 +357,47 @@ function restXml(timing: string): string {
   return `<note><rest/>${timing}<staff>1</staff></note>`;
 }
 
-/** Compiles an immutable Bar to a complete, deterministic MusicXML score. */
-export function compileMusicXml(
-  bar: Bar<any>,
-  options: MusicXmlCompileOptions = {},
-): MusicXmlCompileResult {
-  const diagnostics: CompilationDiagnostic[] = [];
-  const segments = planSegments(bar);
+type NotationInput = Bar<any> | Phrase<any>;
+
+function barsFor(input: NotationInput): readonly Bar<any>[] {
+  return input instanceof Phrase ? input.bars : [input];
+}
+
+function musicXmlDivisionsFor(bar: Bar<any>): number {
   const divisionFactor = gcd(4, bar.timing.denominator * bar.timing.subdivisionsPerUnit);
-  const musicXmlDivisions =
-    (bar.timing.denominator * bar.timing.subdivisionsPerUnit) / divisionFactor;
-  const slotDuration = 4 / divisionFactor;
+  return (bar.timing.denominator * bar.timing.subdivisionsPerUnit) / divisionFactor;
+}
+
+function attributesXml(bar: Bar<any>, previous: Bar<any> | undefined): string {
+  const attributes = [
+    ...(!previous || musicXmlDivisionsFor(previous) !== musicXmlDivisionsFor(bar)
+      ? [`<divisions>${musicXmlDivisionsFor(bar)}</divisions>`]
+      : []),
+    ...(!previous || previous.meter !== bar.meter
+      ? [`<time><beats>${bar.timing.numerator}</beats><beat-type>${bar.timing.denominator}</beat-type></time>`]
+      : []),
+    ...(!previous
+      ? [
+          '<clef number="1"><sign>percussion</sign><line>2</line></clef>',
+          '<staff-details number="1"><staff-lines>5</staff-lines></staff-details>',
+        ]
+      : []),
+  ];
+  return attributes.length > 0 ? `<attributes>${attributes.join("")}</attributes>` : "";
+}
+
+function measureXml(
+  bar: Bar<any>,
+  number: number,
+  previous: Bar<any> | undefined,
+  final: boolean,
+  diagnostics: CompilationDiagnostic[],
+  diagnosticPrefix: string,
+): string {
+  const segments = planSegments(bar);
+  const musicXmlDivisions = musicXmlDivisionsFor(bar);
+  const slotDuration = (4 * musicXmlDivisions) /
+    (bar.timing.denominator * bar.timing.subdivisionsPerUnit);
   const segmentNotations = segments.map((segment) => {
     const notation = notationForLength(bar, segment.length);
     if (!notation) {
@@ -379,14 +411,7 @@ export function compileMusicXml(
     return notation;
   });
   const segmentTypes = segmentNotations.map((notation) => notation.typeDenominator);
-  const measure: string[] = [
-    "<attributes>",
-    `<divisions>${musicXmlDivisions}</divisions>`,
-    `<time><beats>${bar.timing.numerator}</beats><beat-type>${bar.timing.denominator}</beat-type></time>`,
-    "<clef number=\"1\"><sign>percussion</sign><line>2</line></clef>",
-    "<staff-details number=\"1\"><staff-lines>5</staff-lines></staff-details>",
-    "</attributes>",
-  ];
+  const measure = [attributesXml(bar, previous)];
 
   for (const [index, segment] of segments.entries()) {
     const notation = segmentNotations[index]!;
@@ -404,7 +429,7 @@ export function compileMusicXml(
     }
 
     const displays = segment.events.map((event) =>
-      resolveEventDisplay(bar, event, diagnostics),
+      resolveEventDisplay(bar, event, diagnostics, diagnosticPrefix),
     );
     for (const [eventIndex, event] of segment.events.entries()) {
       const display = displays[eventIndex]!;
@@ -422,9 +447,31 @@ export function compileMusicXml(
       );
     }
   }
-  measure.push('<barline location="right"><bar-style>light-heavy</bar-style></barline>');
+  measure.push(
+    `<barline location="right"><bar-style>${final ? "light-heavy" : "regular"}</bar-style></barline>`,
+  );
+  return `<measure number="${number}">${measure.join("")}</measure>`;
+}
 
-  const voices = Object.entries((bar.kit as DrumKit).voices).sort(
+/** Compiles an immutable Bar or Phrase to a complete, deterministic MusicXML score. */
+export function compileMusicXml(
+  input: NotationInput,
+  options: MusicXmlCompileOptions = {},
+): MusicXmlCompileResult {
+  const diagnostics: CompilationDiagnostic[] = [];
+  const bars = barsFor(input);
+  const measures = bars.map((bar, index) =>
+    measureXml(
+      bar,
+      index + 1,
+      bars[index - 1],
+      index === bars.length - 1,
+      diagnostics,
+      input instanceof Phrase ? `bars[${index}].` : "",
+    ),
+  );
+
+  const voices = Object.entries((bars[0]!.kit as DrumKit).voices).sort(
     ([, left], [, right]) => left.order - right.order,
   );
   const instruments = voices
@@ -437,10 +484,8 @@ export function compileMusicXml(
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "https://www.musicxml.org/dtds/partwise.dtd">',
     '<score-partwise version="4.0">',
-    `<part-list><score-part id="P1"><part-name>${escapeXml(bar.kit.name)}</part-name>${instruments}</score-part></part-list>`,
-    '<part id="P1"><measure number="1">',
-    ...measure,
-    "</measure></part>",
+    `<part-list><score-part id="P1"><part-name>${escapeXml(bars[0]!.kit.name)}</part-name>${instruments}</score-part></part-list>`,
+    `<part id="P1">${measures.join("")}</part>`,
     "</score-partwise>",
   ].join("");
 

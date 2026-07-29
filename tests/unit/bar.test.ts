@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   Bar,
   NotationValidationError,
+  Phrase,
   defineDrumKit,
   standardDrumKit,
 } from "../../src/index.js";
@@ -114,5 +115,54 @@ describe("Bar", () => {
   it("keeps the documented standard kit independent from callers", () => {
     expect(standardDrumKit.voices.snare.display.step).toBe("C");
     expect(Object.isFrozen(standardDrumKit.voices.snare.articulations)).toBe(true);
+  });
+});
+
+describe("Phrase", () => {
+  it("keeps an ordered, immutable sequence of bars", () => {
+    const first = new Bar({ meter: "4/4", divisions: 8, hits: { bassDrum: ["1.0"] } });
+    const second = new Bar({ meter: "6/8", divisions: 6, hits: { snare: ["4.0"] } });
+    const phrase = new Phrase({ bars: [first, second] });
+
+    expect(phrase.bars).toEqual([first, second]);
+    expect(phrase.kit).toBe(standardDrumKit);
+    expect(Object.isFrozen(phrase)).toBe(true);
+    expect(Object.isFrozen(phrase.bars)).toBe(true);
+  });
+
+  it.each([
+    [{ bars: [] }, "EMPTY_PHRASE"],
+    [{ bars: [new Bar({ meter: "4/4", divisions: 8 }), {}] }, "INVALID_PHRASE"],
+  ] as const)("rejects an invalid bar sequence", (definition, code) => {
+    expect(() => new Phrase(definition as any)).toThrow(NotationValidationError);
+    try {
+      new Phrase(definition as any);
+    } catch (error) {
+      expect(error).toBeInstanceOf(NotationValidationError);
+      expect((error as NotationValidationError).issues.map((issue) => issue.code)).toContain(code);
+    }
+  });
+
+  it("requires all bars to use the same kit instance", () => {
+    const alternateKit = defineDrumKit({
+      id: "alternate-kit",
+      name: "Alternate kit",
+      voices: {
+        snare: {
+          name: "Snare",
+          order: 0,
+          display: { step: "C", octave: 5, notehead: "normal", stem: "up" },
+          midiUnpitched: 38,
+          defaultArticulations: ["normal"],
+          articulations: { normal: { role: "primary", render: "base" } },
+        },
+      },
+    } as const);
+    const standardBar = new Bar({ meter: "4/4", divisions: 8 });
+    const alternateBar = new Bar({ meter: "4/4", divisions: 8, kit: alternateKit });
+
+    expect(() => new Phrase({ bars: [standardBar, alternateBar] } as any)).toThrow(
+      NotationValidationError,
+    );
   });
 });

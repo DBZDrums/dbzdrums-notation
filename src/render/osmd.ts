@@ -1,6 +1,7 @@
 import { Bar } from "../bar.js";
 import { NotationRenderError } from "../errors.js";
 import { compileMusicXml } from "../musicxml.js";
+import { Phrase } from "../phrase.js";
 import type { RenderOptions, RenderResult } from "../types.js";
 
 interface OsmdInstance {
@@ -21,6 +22,8 @@ interface OsmdModule {
 }
 
 interface HorizontalLine {
+  readonly x1: number;
+  readonly x2: number;
   readonly y: number;
   readonly length: number;
 }
@@ -34,14 +37,13 @@ function parsePathLines(path: string): readonly HorizontalLine[] {
     const x2 = Number(match[3]);
     const y2 = Number(match[4]);
     if (Number.isFinite(x1) && Number.isFinite(y1) && Number.isFinite(x2) && Number.isFinite(y2) && Math.abs(y1 - y2) < 0.1) {
-      lines.push({ y: y1, length: Math.abs(x2 - x1) });
+      lines.push({ x1, x2, y: y1, length: Math.abs(x2 - x1) });
     }
   }
   return lines;
 }
 
-/** Counts full-length horizontal staff lines without relying on OSMD CSS classes. */
-export function countStaffLines(svg: SVGSVGElement): number {
+function horizontalLines(svg: SVGSVGElement): readonly HorizontalLine[] {
   const horizontal: HorizontalLine[] = [];
   for (const line of svg.querySelectorAll("line")) {
     const x1 = Number(line.getAttribute("x1"));
@@ -49,31 +51,57 @@ export function countStaffLines(svg: SVGSVGElement): number {
     const x2 = Number(line.getAttribute("x2"));
     const y2 = Number(line.getAttribute("y2"));
     if (Number.isFinite(x1) && Number.isFinite(y1) && Number.isFinite(x2) && Number.isFinite(y2) && Math.abs(y1 - y2) < 0.1) {
-      horizontal.push({ y: y1, length: Math.abs(x2 - x1) });
+      horizontal.push({ x1, x2, y: y1, length: Math.abs(x2 - x1) });
     }
   }
   for (const path of svg.querySelectorAll("path")) {
     horizontal.push(...parsePathLines(path.getAttribute("d") ?? ""));
   }
-  const longest = Math.max(0, ...horizontal.map((line) => line.length));
-  const fullLength = horizontal.filter((line) => line.length >= longest * 0.7);
-  const yValues = new Set(fullLength.map((line) => Math.round(line.y * 10) / 10));
-  return yValues.size;
+  return horizontal;
 }
 
-/** Renders a Bar into an owned browser container using a lazily loaded OSMD. */
-export async function renderBarToSvg(
-  bar: Bar<any>,
+/**
+ * Finds the number of staff lines in every rendered staff span without relying
+ * on OSMD CSS classes. Five parallel lines with matching endpoints are treated
+ * as one span; OSMD may use one span per measure or per visual system.
+ */
+export function countStaffLineSystems(svg: SVGSVGElement): readonly number[] {
+  const horizontal = horizontalLines(svg);
+  const longest = Math.max(0, ...horizontal.map((line) => line.length));
+  const candidates = horizontal.filter((line) => line.length >= longest * 0.3);
+  const systems = new Map<string, Set<number>>();
+  for (const line of candidates) {
+    const left = Math.round(Math.min(line.x1, line.x2) * 10) / 10;
+    const right = Math.round(Math.max(line.x1, line.x2) * 10) / 10;
+    const key = `${left}:${right}`;
+    const yValues = systems.get(key) ?? new Set<number>();
+    yValues.add(Math.round(line.y * 10) / 10);
+    systems.set(key, yValues);
+  }
+  return Object.freeze(
+    [...systems.values()].map((yValues) => yValues.size),
+  );
+}
+
+/** Counts full-length horizontal staff lines without relying on OSMD CSS classes. */
+export function countStaffLines(svg: SVGSVGElement): number {
+  return countStaffLineSystems(svg).reduce((total, lineCount) => total + lineCount, 0);
+}
+
+type NotationInput = Bar<any> | Phrase<any>;
+
+async function renderNotationToSvg(
+  notation: NotationInput,
   container: HTMLElement,
   options: RenderOptions = {},
 ): Promise<RenderResult> {
   if (!container.isConnected || container.getBoundingClientRect().width <= 0) {
     throw new NotationRenderError(
       "RENDER_TARGET_INVALID",
-      "renderBarToSvg requires a connected target with a positive width.",
+      "A notation render target must be connected and have a positive width.",
     );
   }
-  const compiled = compileMusicXml(bar, options);
+  const compiled = compileMusicXml(notation, options);
   container.replaceChildren();
   let display: OsmdInstance | undefined;
   try {
@@ -98,7 +126,7 @@ export async function renderBarToSvg(
     container.replaceChildren();
     throw new NotationRenderError(
       "OSMD_RENDER_FAILED",
-      "OpenSheetMusicDisplay could not render the drum bar.",
+      "OpenSheetMusicDisplay could not render the drum notation.",
       { cause },
     );
   }
@@ -112,13 +140,13 @@ export async function renderBarToSvg(
       "OpenSheetMusicDisplay completed without producing an SVG element.",
     );
   }
-  const staffLineCount = countStaffLines(svg);
-  if (staffLineCount !== 5) {
+  const staffLineSystems = countStaffLineSystems(svg);
+  if (staffLineSystems.length === 0 || staffLineSystems.some((lineCount) => lineCount !== 5)) {
     display.clear();
     container.replaceChildren();
     throw new NotationRenderError(
       "STAFF_LINE_COUNT_INVALID",
-      `Expected exactly five full-length staff lines; OSMD rendered ${staffLineCount}.`,
+      `Expected exactly five full-length staff lines in every staff span; OSMD rendered ${staffLineSystems.join(", ") || "none"}.`,
     );
   }
 
@@ -133,4 +161,22 @@ export async function renderBarToSvg(
       }
     },
   });
+}
+
+/** Renders a Bar into an owned browser container using a lazily loaded OSMD. */
+export async function renderBarToSvg(
+  bar: Bar<any>,
+  container: HTMLElement,
+  options: RenderOptions = {},
+): Promise<RenderResult> {
+  return renderNotationToSvg(bar, container, options);
+}
+
+/** Renders an ordered Phrase into an owned browser container using a lazily loaded OSMD. */
+export async function renderPhraseToSvg(
+  phrase: Phrase<any>,
+  container: HTMLElement,
+  options: RenderOptions = {},
+): Promise<RenderResult> {
+  return renderNotationToSvg(phrase, container, options);
 }

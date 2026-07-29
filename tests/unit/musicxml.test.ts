@@ -3,12 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   Bar,
   NotationCompilationError,
+  Phrase,
   compileMusicXml,
   defineDrumKit,
 } from "../../src/index.js";
 
-function documentFor(bar: Bar) {
-  const result = compileMusicXml(bar);
+function documentFor(notation: Bar | Phrase) {
+  const result = compileMusicXml(notation);
   const document = new DOMParser().parseFromString(result.musicXml, "application/xml");
   expect(document.getElementsByTagName("parsererror").length).toBe(0);
   return { result, document };
@@ -190,5 +191,64 @@ describe("compileMusicXml", () => {
       "UNSUPPORTED_ARTICULATION_RENDERING",
     ]);
     expect(() => compileMusicXml(bar, { strict: true })).toThrow(NotationCompilationError);
+  });
+
+  it("compiles a phrase into ordered measures, including meter and division changes", () => {
+    const phrase = new Phrase({
+      bars: [
+        new Bar({ meter: "4/4", divisions: 8, hits: { bassDrum: ["1.0"] } }),
+        new Bar({ meter: "6/8", divisions: 12, hits: { snare: ["4.0"] } }),
+      ],
+    });
+    const { document } = documentFor(phrase);
+    const measures = children(document, "measure");
+    const attributes = children(document, "attributes");
+
+    expect(measures.map((measure) => measure.getAttribute("number"))).toEqual(["1", "2"]);
+    expect(children(document, "part")).toHaveLength(1);
+    expect(attributes).toHaveLength(2);
+    expect(text(attributes[0]?.getElementsByTagName("beats")[0])).toBe("4");
+    expect(text(attributes[1]?.getElementsByTagName("beats")[0])).toBe("6");
+    expect(text(attributes[1]?.getElementsByTagName("beat-type")[0])).toBe("8");
+    expect(text(attributes[1]?.getElementsByTagName("divisions")[0])).toBe("4");
+    expect(children(document, "clef")).toHaveLength(1);
+    expect(children(document, "staff-details")).toHaveLength(1);
+    expect(children(document, "bar-style").map((node) => text(node))).toEqual([
+      "regular",
+      "light-heavy",
+    ]);
+  });
+
+  it("includes the bar index in phrase diagnostics", () => {
+    const kit = defineDrumKit({
+      id: "phrase-diagnostic-kit",
+      name: "Phrase diagnostic kit",
+      voices: {
+        splash: {
+          name: "Splash",
+          order: 0,
+          display: { step: "B", octave: 5, notehead: "x", stem: "up" },
+          midiUnpitched: 55,
+          defaultArticulations: ["normal"],
+          articulations: {
+            normal: { role: "primary", render: "base" },
+            mute: { role: "modifier", render: "unsupported" },
+          },
+        },
+      },
+    } as const);
+    const phrase = new Phrase({
+      bars: [
+        new Bar({ meter: "4/4", divisions: 8, kit }),
+        new Bar({
+          meter: "4/4",
+          divisions: 8,
+          kit,
+          hits: { splash: [{ at: "1.0", articulations: ["mute"] }] },
+        }),
+      ],
+    });
+
+    expect(compileMusicXml(phrase).diagnostics[0]?.path).toBe("bars[1].events.splash.1.0");
   });
 });

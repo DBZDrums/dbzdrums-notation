@@ -1,6 +1,6 @@
 # @dbzdrums/notation
 
-`@dbzdrums/notation` turns a concise, validated one-bar drum pattern into standards-based MusicXML or a browser SVG chart. It is a standalone TypeScript library: it does not import React or any DBZDrums application type.
+`@dbzdrums/notation` turns concise, validated drum bars and phrases into standards-based MusicXML or a browser SVG chart. It is a standalone TypeScript library: it does not import React or any DBZDrums application type.
 
 ## Project documentation
 
@@ -41,6 +41,26 @@ const { svg, dispose } = await renderBarToSvg(bar, document.querySelector("#char
 
 `renderBarToSvg()` owns and clears its target container. The target must be connected to the document and have a positive width. Call `dispose()` when the chart is no longer needed.
 
+### Phrases
+
+Use `Phrase` for an ordered, non-empty sequence of existing `Bar` values. Each bar may use a different meter or grid resolution, but every bar must use the same drum-kit instance.
+
+```ts
+import { Bar, Phrase, compileMusicXml, renderPhraseToSvg } from "@dbzdrums/notation";
+
+const phrase = new Phrase({
+  bars: [
+    new Bar({ meter: "4/4", divisions: 8, hits: { bassDrum: ["1.0", "3.0"] } }),
+    new Bar({ meter: "6/8", divisions: 6, hits: { snare: ["3.0", "6.0"] } }),
+  ],
+});
+
+const { musicXml } = compileMusicXml(phrase);
+const { svg, dispose } = await renderPhraseToSvg(phrase, document.querySelector("#chart")!);
+```
+
+`Phrase` deliberately has no name, repeat marks, labels, or visible measure numbers. A chart editor can expand repeated material into its bars and present repeat counts or section text alongside the rendered phrase.
+
 ## Input model
 
 - `meter` is a string such as `"4/4"` or `"6/8"`. Supported denominators are 1, 2, 4, 8, 16, and 32.
@@ -48,6 +68,7 @@ const { svg, dispose } = await renderBarToSvg(bar, document.querySelector("#char
 - Positions are canonical strings: `writtenUnit.subdivision`. Written units start at 1; subdivisions start at 0. Thus 4/4 at eight divisions accepts `"1.0"` through `"4.1"`, while 6/8 at six divisions accepts `"1.0"` through `"6.0"`.
 - `grouping`, for example `[3, 3]` in 6/8, only controls beaming. It never changes coordinates.
 - `Bar` is immutable. `add()` returns a new value.
+- `Phrase` is immutable and preserves the input bar order. It validates that its bars share one drum-kit instance.
 
 The default kit exposes `bassDrum`, `floorTom`, `snare`, `tom2`, `tom1`, `ride`, `hiHat`, and `crash`. Snare supports the mutually exclusive techniques `normal`, `flam`, and `rim`; hi-hat supports `closed`, `open`, and `pedal`.
 
@@ -69,9 +90,9 @@ The default kit exposes `bassDrum`, `floorTom`, `snare`, `tom2`, `tom1`, `ride`,
 
 ## MusicXML and SVG guarantees
 
-The compiler produces a one-part MusicXML 4.0 `score-partwise` document with percussion clef, MIDI channel 10 instruments, a true five-line staff, time signature, rhythm inferred from attack spacing, rests, chords, beams, tuplets, and final barline. SVG rendering is delegated to OpenSheetMusicDisplay 2.1.0, loaded only by the browser renderer.
+The compiler produces a one-part MusicXML 4.0 `score-partwise` document with percussion clef, MIDI channel 10 instruments, a true five-line staff, time signature, rhythm inferred from attack spacing, rests, chords, beams, tuplets, and final barline. A phrase compiles into ordered MusicXML measures and repeats attributes only when a meter or MusicXML division value changes. SVG rendering is delegated to OpenSheetMusicDisplay 2.1.0, loaded only by the browser renderer.
 
-`compileMusicXml()` is usable in Node and browser environments. `renderBarToSvg()` is browser-only. Multiple bars, playback, MIDI output, PDF output, React bindings, and application-specific DBZDrums adapters are deliberately outside v0.1.
+`compileMusicXml()` is usable in Node and browser environments. `renderBarToSvg()` and `renderPhraseToSvg()` are browser-only. Playback, MIDI output, PDF output, React bindings, repeat conventions, and application-specific DBZDrums adapters are deliberately outside v0.1.
 
 ## Local development
 
@@ -87,9 +108,9 @@ npm run test:browser
 ```
 
 `npm run dev` opens the repository's interactive playground. It lets you toggle
-drum hits in a grid, edit the corresponding `Bar` JSON definition, inspect the
-TypeScript call and MusicXML, download the generated `.musicxml`, and see the
-actual OSMD SVG. The playground is a development showcase, not part of the
-published package or its core runtime.
+drum hits in a grid, add, duplicate, remove, and select bars in a phrase, edit
+the corresponding JSON definition, inspect the TypeScript call and MusicXML,
+download the generated `.musicxml`, and see the actual OSMD SVG. The playground
+is a development showcase, not part of the published package or its core runtime.
 
 Playwright runs the real renderer in Chromium and Firefox. It asserts five full-length staff lines, barlines, rendered notehead glyph counts, no browser errors, and a compact visual-regression screenshot in each browser.

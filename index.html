@@ -89,6 +89,14 @@
       .primary:hover { background: #f3cc75; border-color: #f3cc75; }
       .form-actions, .output-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 15px; }
       .form-actions button, .output-actions button { padding: 9px 11px; font-size: 0.83rem; }
+      .phrase-builder { display: grid; gap: 13px; }
+      .phrase-bars { display: flex; flex-wrap: wrap; gap: 8px; }
+      .phrase-bar { min-width: 112px; padding: 9px 10px; color: #d8d2c6; background: #24231f; font-size: 0.8rem; text-align: left; }
+      .phrase-bar[aria-pressed="true"] { color: #16140f; background: #e4b85b; border-color: #e4b85b; font-weight: 750; }
+      .phrase-actions { display: flex; flex-wrap: wrap; gap: 9px; }
+      .phrase-actions button { padding: 8px 10px; font-size: 0.82rem; }
+      button:disabled { cursor: not-allowed; opacity: 0.45; }
+      button:disabled:hover { border-color: transparent; background: #2b2a25; }
 
       .grid-wrap { overflow-x: auto; padding-bottom: 2px; }
       .hit-grid { width: 100%; min-width: 620px; border-collapse: collapse; font-size: 0.78rem; }
@@ -142,7 +150,7 @@
         <div>
           <p class="eyebrow">@dbzdrums/notation · v0.1</p>
           <h1>Build a beat.<br />See the score.</h1>
-          <p class="lede">Create a one-bar drum groove, shape it in the grid, and see it as clear, standard notation. The matching Bar definition and MusicXML are always close at hand.</p>
+          <p class="lede">Create a drum groove or a multi-bar phrase, shape it in the grid, and see it as clear, standard notation. The matching definition and MusicXML are always close at hand.</p>
         </div>
         <div class="hero-meta">Write · Preview · Export</div>
       </header>
@@ -162,6 +170,8 @@
                 <button class="preset" type="button" data-preset="triplet" aria-pressed="false">Triplets</button>
                 <button class="preset" type="button" data-preset="quarterGrid" aria-pressed="false">Quarter notes / 16-step grid</button>
                 <button class="preset" type="button" data-preset="articulations" aria-pressed="false">Articulations</button>
+                <button class="preset" type="button" data-preset="twoBarPhrase" aria-pressed="false">Two-bar phrase</button>
+                <button class="preset" type="button" data-preset="mixedMeterPhrase" aria-pressed="false">Mixed meter phrase</button>
               </div>
 
               <form id="bar-form" class="bar-form">
@@ -185,9 +195,25 @@
             </div>
           </section>
 
+          <section class="panel" aria-labelledby="phrase-heading">
+            <div class="panel-heading">
+              <h2 id="phrase-heading">2. Build a phrase</h2>
+              <p>select a bar, then shape it below</p>
+            </div>
+            <div class="panel-body phrase-builder">
+              <div id="phrase-bars" class="phrase-bars" aria-label="Bars in this phrase"></div>
+              <div class="phrase-actions">
+                <button id="add-bar" type="button">Add bar</button>
+                <button id="duplicate-bar" type="button">Duplicate bar</button>
+                <button id="remove-bar" type="button">Remove bar</button>
+              </div>
+              <p id="phrase-hint" class="hint">Add a bar when you want to turn this groove into a phrase.</p>
+            </div>
+          </section>
+
           <section class="panel" aria-labelledby="grid-heading">
             <div class="panel-heading">
-              <h2 id="grid-heading">2. Build your groove</h2>
+              <h2 id="grid-heading">3. Build your groove</h2>
               <p>one circle = one grid position</p>
             </div>
             <div class="panel-body">
@@ -197,8 +223,8 @@
 
           <section class="panel" aria-labelledby="definition-heading">
             <div class="panel-heading">
-              <h2 id="definition-heading">3. Edit the bar definition</h2>
-              <p>the same data passed to <code>new Bar(...)</code></p>
+              <h2 id="definition-heading">4. Edit the bar definition</h2>
+              <p id="definition-description">the same data passed to <code>new Bar(...)</code></p>
             </div>
             <div class="panel-body">
               <textarea id="definition" aria-label="Bar definition as JSON" spellcheck="false"></textarea>
@@ -217,7 +243,7 @@
               <h2 id="preview-heading">Score preview</h2>
               <p>updates as you edit</p>
             </div>
-            <div class="score-shell"><div id="target" aria-label="Rendered drum score"></div><div class="score-caption">Your groove, written as standard drum notation.</div></div>
+            <div class="score-shell"><div id="target" aria-label="Rendered drum score"></div><div class="score-caption">Your groove or phrase, written as standard drum notation.</div></div>
             <div class="panel-body">
               <p id="status" class="status" data-tone="neutral" aria-live="polite">Loading score…</p>
               <div id="issues" class="issues" aria-live="polite"></div>

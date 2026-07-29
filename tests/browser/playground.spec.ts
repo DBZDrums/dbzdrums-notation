@@ -36,3 +36,24 @@ test("the playground applies a selected hi-hat technique to the preview", async 
   await expect(page.locator("#definition")).toHaveValue(/"hiHat"[\s\S]*"open"/);
   await expect(page.locator("#musicxml")).toContainText("<notehead>circle-x</notehead>");
 });
+
+test("the playground builds a phrase with add, duplicate, and remove", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "Add bar" }).click();
+  await expect(page.locator("#phrase-bars .phrase-bar")).toHaveCount(2);
+  await expect(page.locator("#definition")).toHaveValue(/"bars"/);
+  await expect(page.locator("#api-code")).toContainText("new Phrase({ bars })");
+
+  await page.locator("#meter").fill("6/8");
+  await page.locator("#divisions").fill("6");
+  await page.getByRole("button", { name: "Update grid" }).click();
+  await expect(page.locator('#phrase-bars .phrase-bar[aria-pressed="true"]')).toHaveText(/6\/8/);
+  await expect(page.locator("#target svg")).toBeVisible();
+
+  await page.getByRole("button", { name: "Duplicate bar" }).click();
+  await expect(page.locator("#phrase-bars .phrase-bar")).toHaveCount(3);
+  await page.getByRole("button", { name: "Remove bar" }).click();
+  await expect(page.locator("#phrase-bars .phrase-bar")).toHaveCount(2);
+  await expect(page.locator("#status")).toContainText("Score updated.");
+});

@@ -1,4 +1,5 @@
 export { Bar } from "./bar.js";
+export { Phrase } from "./phrase.js";
 export {
   NotationCompilationError,
   NotationRenderError,
@@ -6,7 +7,7 @@ export {
 } from "./errors.js";
 export { defineDrumKit, standardDrumKit } from "./kit.js";
 export { compileMusicXml } from "./musicxml.js";
-export { renderBarToSvg } from "./render/osmd.js";
+export { renderBarToSvg, renderPhraseToSvg } from "./render/osmd.js";
 export type {
   ArticulationDefinition,
   ArticulationId,
@@ -26,6 +27,7 @@ export type {
   NotationIssue,
   Notehead,
   Position,
+  PhraseDefinition,
   RenderCode,
   RenderOptions,
   RenderResult,
