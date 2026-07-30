@@ -21,15 +21,28 @@ trigger. Do not run `npm publish` from a local checkout.
 
 ## Routine release
 
-Prepare the version, changelog, and changesets according to the change being
-released. Once the release commit is on `main` and the normal checks pass,
-create and push an annotated tag:
+The repository Makefile automates the normal flow. It requires a clean local
+`main`, verifies that it contains the current remote `main`, rejects existing
+local or remote tags, and uses an atomic push so `main` and its release tag are
+published together. It never runs `npm publish`. These targets are for routine
+releases after the initial-publication bootstrap described below.
 
 ```sh
-git switch main
-git pull --ff-only
-git tag -a vX.Y.Z -m "Release vX.Y.Z"
-git push origin vX.Y.Z
+make full-release
+```
+
+`full-release` derives the Semantic Version from the pending Changesets, then
+synchronizes `package-lock.json`, commits only release metadata as
+`chore: release vX.Y.Z`, runs package and browser validation, creates the
+annotated `vX.Y.Z` tag, then pushes `main` and the tag. For a review point
+between stages, first run the versioning target and inspect the generated
+version in `package.json`. Then substitute that version for `X.Y.Z` below:
+
+```sh
+make release-prepare
+make release-commit VERSION=X.Y.Z
+make release-tag VERSION=X.Y.Z
+make release-push VERSION=X.Y.Z
 ```
 
 Review the validation job, then approve the pending deployment to the `npm`
