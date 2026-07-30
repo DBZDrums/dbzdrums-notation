@@ -136,4 +136,4 @@ the corresponding JSON definition, inspect the TypeScript call and MusicXML,
 download the generated `.musicxml`, and see the actual OSMD SVG. The playground
 is a development showcase, not part of the published package or its core runtime.
 
-Playwright runs the real renderer in Chromium and Firefox. It asserts five full-length staff lines, barlines, rendered notehead glyph counts, no browser errors, and a compact visual-regression screenshot in each browser.
+Playwright runs the real renderer in Chromium and Firefox. It asserts five visible, full-length staff lines, barlines, rendered notehead glyph counts, no browser errors, and a compact visual-regression screenshot in each browser.

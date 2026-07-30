@@ -6,6 +6,7 @@ import type { RenderOptions, RenderResult } from "../types.js";
 
 interface OsmdInstance {
   readonly EngravingRules: {
+    PageBottomMargin: number;
     PercussionOneLineCutoff: number;
     RenderClefsAtBeginningOfStaffline: boolean;
     RenderTimeSignatures: boolean;
@@ -177,6 +178,9 @@ async function renderNotationToSvg(
       options.presentation?.showClef !== false;
     display.EngravingRules.RenderTimeSignatures =
       options.presentation?.showTimeSignature !== false;
+    // compacttight sets this margin to zero, which can clip the bottom staff
+    // line at particular browser zoom levels. OSMD recommends a small margin.
+    display.EngravingRules.PageBottomMargin = 0.3;
     // OSMD otherwise collapses sparse percussion, including an empty Bar, to a
     // one-line staff. This package always promises five-line drum notation.
     display.EngravingRules.PercussionOneLineCutoff = 0;

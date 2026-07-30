@@ -8,6 +8,7 @@ import type { ScorePresentationOptions } from "../../src/index.js";
 
 type FixtureName =
   | "empty"
+  | "singleSnare"
   | "straight"
   | "chord"
   | "compound"
@@ -38,6 +39,12 @@ function barFor(name: Exclude<FixtureName, "longPhrase">): Bar {
   switch (name) {
     case "empty":
       return new Bar({ meter: "4/4", divisions: 8 });
+    case "singleSnare":
+      return new Bar({
+        meter: "4/4",
+        divisions: 8,
+        hits: { snare: ["1.0"] },
+      });
     case "straight":
       return new Bar({
         meter: "4/4",

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1
+
+### Patch Changes
+
+- Prevent compact SVG scores from clipping the bottom staff line at particular browser zoom levels.
+
 ## 0.2.0
 
 ### Minor Changes

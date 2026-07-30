@@ -137,6 +137,42 @@ test("empty bar renders a five-line percussion staff", async ({ page }) => {
   expect(musicXml).not.toContain("<unpitched>");
 });
 
+test("a compact SVG keeps every staff line inside its visible viewport", async ({
+  page,
+}) => {
+  await renderFixture(page, "singleSnare");
+  const result = await page.locator("#target svg").evaluate((svg) => {
+    const viewBox = (svg.getAttribute("viewBox") ?? "")
+      .split(/[\s,]+/)
+      .map(Number);
+    if (viewBox.length !== 4 || viewBox.some((value) => !Number.isFinite(value))) {
+      throw new Error("Expected a numeric SVG viewBox.");
+    }
+    const viewBoxTop = viewBox[1]!;
+    const viewBoxBottom = viewBoxTop + viewBox[3]!;
+    const lines = [
+      ...svg.querySelectorAll<SVGPathElement>(
+        "g.staffline > g.vf-measure > path"
+      ),
+    ].map((line) => {
+      const bounds = line.getBBox();
+      const halfStrokeWidth = Number(line.getAttribute("stroke-width")) / 2;
+      return {
+        topPadding: bounds.y - halfStrokeWidth - viewBoxTop,
+        bottomPadding:
+          viewBoxBottom - (bounds.y + halfStrokeWidth),
+      };
+    });
+    return lines;
+  });
+
+  expect(result).toHaveLength(5);
+  for (const line of result) {
+    expect(line.topPadding).toBeGreaterThanOrEqual(0);
+    expect(line.bottomPadding).toBeGreaterThan(0);
+  }
+});
+
 test("presentation options hide score markings in MusicXML and SVG", async ({ page }) => {
   const musicXml = await renderWithPresentation(page, "phrase");
   const svg = page.locator("#target svg");

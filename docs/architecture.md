@@ -4,7 +4,7 @@ The public package is intentionally one installation. Its source has three hard 
 
 1. `Bar`, `Phrase`, validation, and drum-kit definitions are pure TypeScript and have no runtime dependency.
 2. The MusicXML compiler consumes only validated `Bar` or `Phrase` input and returns deterministic XML plus degradation diagnostics.
-3. The OSMD adapter dynamically imports OpenSheetMusicDisplay only when `renderBarToSvg()` or `renderPhraseToSvg()` is called. It owns a supplied browser container, supports cooperative `AbortSignal` cancellation at asynchronous checkpoints, and verifies the emitted SVG contains exactly five full-length staff lines in every system. Cancellation cannot interrupt synchronous OSMD work already running, but prevents an obsolete result from being published and clears the owned container.
+3. The OSMD adapter dynamically imports OpenSheetMusicDisplay only when `renderBarToSvg()` or `renderPhraseToSvg()` is called. It owns a supplied browser container, supports cooperative `AbortSignal` cancellation at asynchronous checkpoints, restores a small bottom page margin that compact OSMD layouts otherwise remove, and verifies the emitted SVG contains exactly five full-length staff lines in every system. Cancellation cannot interrupt synchronous OSMD work already running, but prevents an obsolete result from being published and clears the owned container.
 
 MusicXML is the internal interchange format, not the authoring API. The public browser API compiles and renders in one call; callers can separately retain the MusicXML result for export or inspection.
 
