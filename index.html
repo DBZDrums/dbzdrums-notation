@@ -95,6 +95,9 @@
       .phrase-bar[aria-pressed="true"] { color: #16140f; background: #e4b85b; border-color: #e4b85b; font-weight: 750; }
       .phrase-actions { display: flex; flex-wrap: wrap; gap: 9px; }
       .phrase-actions button { padding: 8px 10px; font-size: 0.82rem; }
+      .notation-options { display: grid; gap: 10px; margin: 0; padding: 0; border: 0; }
+      .notation-options label { display: flex; align-items: center; gap: 9px; color: #d8d2c6; font-size: 0.86rem; }
+      .notation-options input { width: auto; min-height: auto; margin: 0; accent-color: #e4b85b; }
       button:disabled { cursor: not-allowed; opacity: 0.45; }
       button:disabled:hover { border-color: transparent; background: #2b2a25; }
 
@@ -211,9 +214,23 @@
             </div>
           </section>
 
+          <section class="panel" aria-labelledby="markings-heading">
+            <div class="panel-heading">
+              <h2 id="markings-heading">3. Control score markings</h2>
+              <p>choose what appears in the SVG and MusicXML</p>
+            </div>
+            <div class="panel-body">
+              <fieldset class="notation-options">
+                <label><input id="show-clef" type="checkbox" checked /> Show percussion clef</label>
+                <label><input id="show-time-signature" type="checkbox" checked /> Show time signature</label>
+                <label><input id="show-final-barline" type="checkbox" checked /> Show final barline</label>
+              </fieldset>
+            </div>
+          </section>
+
           <section class="panel" aria-labelledby="grid-heading">
             <div class="panel-heading">
-              <h2 id="grid-heading">3. Build your groove</h2>
+              <h2 id="grid-heading">4. Build your groove</h2>
               <p>one circle = one grid position</p>
             </div>
             <div class="panel-body">
@@ -223,7 +240,7 @@
 
           <section class="panel" aria-labelledby="definition-heading">
             <div class="panel-heading">
-              <h2 id="definition-heading">4. Edit the bar definition</h2>
+              <h2 id="definition-heading">5. Edit the bar definition</h2>
               <p id="definition-description">the same data passed to <code>new Bar(...)</code></p>
             </div>
             <div class="panel-body">

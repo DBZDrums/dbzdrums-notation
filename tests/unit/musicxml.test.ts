@@ -7,9 +7,10 @@ import {
   compileMusicXml,
   defineDrumKit,
 } from "../../src/index.js";
+import type { MusicXmlCompileOptions } from "../../src/index.js";
 
-function documentFor(notation: Bar | Phrase) {
-  const result = compileMusicXml(notation);
+function documentFor(notation: Bar | Phrase, options: MusicXmlCompileOptions = {}) {
+  const result = compileMusicXml(notation, options);
   const document = new DOMParser().parseFromString(result.musicXml, "application/xml");
   expect(document.getElementsByTagName("parsererror").length).toBe(0);
   return { result, document };
@@ -216,6 +217,34 @@ describe("compileMusicXml", () => {
     expect(children(document, "bar-style").map((node) => text(node))).toEqual([
       "regular",
       "light-heavy",
+    ]);
+  });
+
+  it("can hide score markings while retaining MusicXML timing and bar structure", () => {
+    const phrase = new Phrase({
+      bars: [
+        new Bar({ meter: "4/4", divisions: 8, hits: { bassDrum: ["1.0"] } }),
+        new Bar({ meter: "6/8", divisions: 12, hits: { snare: ["4.0"] } }),
+      ],
+    });
+    const { document } = documentFor(phrase, {
+      presentation: {
+        showClef: false,
+        showTimeSignature: false,
+        showFinalBarline: false,
+      },
+    });
+
+    const clefs = children(document, "clef");
+    const times = children(document, "time");
+    expect(clefs).toHaveLength(1);
+    expect(clefs[0]?.getAttribute("print-object")).toBe("no");
+    expect(times).toHaveLength(2);
+    expect(times.every((time) => time.getAttribute("print-object") === "no")).toBe(true);
+    expect(times.map((time) => text(time.getElementsByTagName("beats")[0]))).toEqual(["4", "6"]);
+    expect(children(document, "bar-style").map((node) => text(node))).toEqual([
+      "regular",
+      "none",
     ]);
   });
 

@@ -4,6 +4,7 @@ import {
   renderBarToSvg,
   renderPhraseToSvg,
 } from "../../src/index.js";
+import type { ScorePresentationOptions } from "../../src/index.js";
 
 type FixtureName =
   | "empty"
@@ -18,6 +19,10 @@ type FixtureName =
 declare global {
   interface Window {
     renderBrowserNotationFixture: (name: FixtureName) => Promise<string>;
+    renderPresentationFixture: (
+      notation: "bar" | "phrase",
+      presentation: ScorePresentationOptions,
+    ) => Promise<string>;
     abortNotationFixture: (
       notation: "bar" | "phrase",
       timing: "alreadyAborted" | "afterStart"
@@ -130,6 +135,20 @@ window.renderBrowserNotationFixture = async (name) => {
           target
         )
       : await renderBarToSvg(barFor(name), target);
+  return result.musicXml;
+};
+
+window.renderPresentationFixture = async (notation, presentation) => {
+  const target = document.querySelector("#target");
+  if (!(target instanceof HTMLElement)) {
+    throw new Error("Missing fixture target.");
+  }
+  const input = notation === "phrase"
+    ? new Phrase({ bars: [barFor("straight"), barFor("chord")] })
+    : barFor("straight");
+  const result = input instanceof Phrase
+    ? await renderPhraseToSvg(input, target, { presentation })
+    : await renderBarToSvg(input, target, { presentation });
   return result.musicXml;
 };
 

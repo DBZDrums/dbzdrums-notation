@@ -31,6 +31,7 @@ export type {
   RenderCode,
   RenderOptions,
   RenderResult,
+  ScorePresentationOptions,
   StemDirection,
   ValidationCode,
   VoiceDisplay,

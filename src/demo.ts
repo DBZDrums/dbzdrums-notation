@@ -8,13 +8,20 @@ import {
   Phrase,
   standardDrumKit,
 } from "./index.js";
-import type { BarDefinition, HitInput, Meter, Position } from "./types.js";
+import type {
+  BarDefinition,
+  HitInput,
+  Meter,
+  Position,
+  ScorePresentationOptions,
+} from "./types.js";
 
 type FixtureName = "straight" | "chord" | "compound" | "triplet" | "quarterGrid" | "articulations";
 type RenderFixtureName = FixtureName | "longPhrase";
 type PhrasePresetName = "twoBarPhrase" | "mixedMeterPhrase";
 type PresetName = FixtureName | PhrasePresetName;
 type DemoHits = Record<string, HitInput[]>;
+type ResolvedPresentationOptions = Required<ScorePresentationOptions>;
 
 interface DemoBarState {
   meter: string;
@@ -53,6 +60,9 @@ const phraseHint = requiredElement<HTMLParagraphElement>("phrase-hint");
 const addBarButton = requiredElement<HTMLButtonElement>("add-bar");
 const duplicateBarButton = requiredElement<HTMLButtonElement>("duplicate-bar");
 const removeBarButton = requiredElement<HTMLButtonElement>("remove-bar");
+const showClefInput = requiredElement<HTMLInputElement>("show-clef");
+const showTimeSignatureInput = requiredElement<HTMLInputElement>("show-time-signature");
+const showFinalBarlineInput = requiredElement<HTMLInputElement>("show-final-barline");
 const definitionHeading = requiredElement<HTMLHeadingElement>("definition-heading");
 const definitionDescription = requiredElement<HTMLParagraphElement>("definition-description");
 
@@ -60,6 +70,11 @@ const voiceEntries = Object.entries(standardDrumKit.voices);
 const selectedTechniques = new Map<string, readonly string[]>();
 let state: DemoState = { kind: "bar", bar: preset("straight") };
 let activePreset: PresetName | undefined = "straight";
+let presentation: ResolvedPresentationOptions = {
+  showClef: true,
+  showTimeSignature: true,
+  showFinalBarline: true,
+};
 let latestMusicXml = "";
 let currentDispose: (() => void) | undefined;
 let renderQueue: Promise<void> = Promise.resolve();
@@ -389,31 +404,60 @@ function toggleHit(voiceId: string, position: Position): void {
   void enqueueRender();
 }
 
-function codeFor(definition: BarDefinition): string {
-  return [
+function presentationForCode(): ScorePresentationOptions | undefined {
+  if (presentation.showClef && presentation.showTimeSignature && presentation.showFinalBarline) {
+    return undefined;
+  }
+  return presentation;
+}
+
+function codeFor(
+  definition: BarDefinition,
+  presentationOptions: ScorePresentationOptions | undefined,
+): string {
+  const code = [
     'import { Bar, renderBarToSvg } from "@dbzdrums/notation";',
     "",
     `const bar = new Bar(${JSON.stringify(definition, null, 2)});`,
+  ];
+  if (presentationOptions) {
+    code.push("", `const presentation = ${JSON.stringify(presentationOptions, null, 2)};`);
+  }
+  code.push(
     "",
     'const chart = document.querySelector<HTMLElement>("#chart");',
     "if (!chart) throw new Error(\"Missing chart target.\");",
-    "const { musicXml, svg, dispose } = await renderBarToSvg(bar, chart);",
-  ].join("\n");
+    `const { musicXml, svg, dispose } = await renderBarToSvg(bar, chart${
+      presentationOptions ? ", { presentation }" : ""
+    });`,
+  );
+  return code.join("\n");
 }
 
-function codeForPhrase(definitions: readonly BarDefinition[]): string {
-  return [
+function codeForPhrase(
+  definitions: readonly BarDefinition[],
+  presentationOptions: ScorePresentationOptions | undefined,
+): string {
+  const code = [
     'import { Bar, Phrase, renderPhraseToSvg } from "@dbzdrums/notation";',
     "",
     "const bars = [",
     ...definitions.map((definition) => `  new Bar(${JSON.stringify(definition, null, 2).replaceAll("\n", "\n  ")}),`),
     "];",
     "const phrase = new Phrase({ bars });",
+  ];
+  if (presentationOptions) {
+    code.push("", `const presentation = ${JSON.stringify(presentationOptions, null, 2)};`);
+  }
+  code.push(
     "",
     'const chart = document.querySelector<HTMLElement>("#chart");',
     "if (!chart) throw new Error(\"Missing chart target.\");",
-    "const { musicXml, svg, dispose } = await renderPhraseToSvg(phrase, chart);",
-  ].join("\n");
+    `const { musicXml, svg, dispose } = await renderPhraseToSvg(phrase, chart${
+      presentationOptions ? ", { presentation }" : ""
+    });`,
+  );
+  return code.join("\n");
 }
 
 function renderPhraseBuilder(): void {
@@ -455,14 +499,18 @@ function syncInterface(options: { readonly updateDefinition?: boolean } = {}): v
   groupingInput.value = activeBar.grouping;
   const definition = definitionForState(state);
   if (options.updateDefinition ?? true) definitionInput.value = JSON.stringify(definition, null, 2);
+  const presentationOptions = presentationForCode();
   apiCode.textContent = state.kind === "bar"
-    ? codeFor(definitionFor(state.bar))
-    : codeForPhrase(state.bars.map((bar) => definitionFor(bar)));
-  definitionHeading.textContent = state.kind === "bar" ? "4. Edit the bar definition" : "4. Edit the phrase definition";
+    ? codeFor(definitionFor(state.bar), presentationOptions)
+    : codeForPhrase(state.bars.map((bar) => definitionFor(bar)), presentationOptions);
+  definitionHeading.textContent = state.kind === "bar" ? "5. Edit the bar definition" : "5. Edit the phrase definition";
   definitionDescription.innerHTML = state.kind === "bar"
     ? "the same data passed to <code>new Bar(...)</code>"
     : "an ordered list of the bars passed to <code>new Phrase(...)</code>";
   definitionInput.setAttribute("aria-label", state.kind === "bar" ? "Bar definition as JSON" : "Phrase definition as JSON");
+  showClefInput.checked = presentation.showClef;
+  showTimeSignatureInput.checked = presentation.showTimeSignature;
+  showFinalBarlineInput.checked = presentation.showFinalBarline;
   for (const button of document.querySelectorAll<HTMLButtonElement>("[data-preset]")) {
     button.setAttribute("aria-pressed", String(button.dataset.preset === activePreset));
   }
@@ -511,8 +559,8 @@ function enqueueRender(): Promise<string | undefined> {
       currentDispose?.();
       currentDispose = undefined;
       const result = notation instanceof Phrase
-        ? await renderPhraseToSvg(notation, target)
-        : await renderBarToSvg(notation, target);
+        ? await renderPhraseToSvg(notation, target, { presentation })
+        : await renderBarToSvg(notation, target, { presentation });
       currentDispose = result.dispose;
       latestMusicXml = result.musicXml;
       musicXmlOutput.textContent = latestMusicXml;
@@ -613,6 +661,20 @@ function setPreset(name: PresetName): void {
 
 for (const button of document.querySelectorAll<HTMLButtonElement>("[data-preset]")) {
   button.addEventListener("click", () => setPreset(button.dataset.preset as PresetName));
+}
+
+function updatePresentation(): void {
+  presentation = {
+    showClef: showClefInput.checked,
+    showTimeSignature: showTimeSignatureInput.checked,
+    showFinalBarline: showFinalBarlineInput.checked,
+  };
+  syncInterface({ updateDefinition: false });
+  void enqueueRender();
+}
+
+for (const input of [showClefInput, showTimeSignatureInput, showFinalBarlineInput]) {
+  input.addEventListener("change", updatePresentation);
 }
 
 function updatePhraseStructure(next: DemoState): void {

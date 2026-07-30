@@ -7,6 +7,8 @@ import type { RenderOptions, RenderResult } from "../types.js";
 interface OsmdInstance {
   readonly EngravingRules: {
     PercussionOneLineCutoff: number;
+    RenderClefsAtBeginningOfStaffline: boolean;
+    RenderTimeSignatures: boolean;
     SetWantedStemDirectionByXml: boolean;
   };
   zoom: number;
@@ -171,6 +173,10 @@ async function renderNotationToSvg(
       pageBackgroundColor: "transparent",
     });
     display.EngravingRules.SetWantedStemDirectionByXml = true;
+    display.EngravingRules.RenderClefsAtBeginningOfStaffline =
+      options.presentation?.showClef !== false;
+    display.EngravingRules.RenderTimeSignatures =
+      options.presentation?.showTimeSignature !== false;
     // OSMD otherwise collapses sparse percussion, including an empty Bar, to a
     // one-line staff. This package always promises five-line drum notation.
     display.EngravingRules.PercussionOneLineCutoff = 0;

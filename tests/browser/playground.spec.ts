@@ -37,6 +37,29 @@ test("the playground applies a selected hi-hat technique to the preview", async 
   await expect(page.locator("#musicxml")).toContainText("<notehead>circle-x</notehead>");
 });
 
+test("the playground controls score markings in its preview, XML, and API example", async ({ page }) => {
+  await page.goto("/");
+
+  await page.locator("#show-clef").uncheck();
+  await page.locator("#show-time-signature").uncheck();
+  await page.locator("#show-final-barline").uncheck();
+
+  await expect(page.locator("#status")).toContainText("Score updated.");
+  await expect(page.locator("#api-code")).toContainText('"showClef": false');
+  await expect(page.locator("#api-code")).toContainText('"showTimeSignature": false');
+  await expect(page.locator("#api-code")).toContainText('"showFinalBarline": false');
+  await expect(page.locator("#musicxml")).toContainText('<clef number="1" print-object="no">');
+  await expect(page.locator("#musicxml")).toContainText('<time print-object="no">');
+  await expect(page.locator("#musicxml")).toContainText("<bar-style>none</bar-style>");
+  await expect(page.locator("#target svg g.vf-clef")).toHaveCount(0);
+  await expect(page.locator("#target svg g.vf-timesignature")).toHaveCount(0);
+
+  const finalBarlineRectCount = await page.locator("#target svg").evaluate((score) =>
+    score.querySelector("g.staffline > g.vf-measure")?.querySelectorAll(":scope > rect").length,
+  );
+  expect(finalBarlineRectCount).toBe(0);
+});
+
 test("the playground builds a phrase with add, duplicate, and remove", async ({ page }) => {
   await page.goto("/");
 

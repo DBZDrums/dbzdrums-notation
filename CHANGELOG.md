@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0
+
+### Minor Changes
+
+- Add shared MusicXML, SVG, and playground controls for the percussion clef, time signature, and final barline.
+
 All notable changes to this project will be documented in this file.
 
 ## 0.1.0

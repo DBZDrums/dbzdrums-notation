@@ -116,8 +116,20 @@ export interface NotationIssue<C extends string = string> {
 
 export type CompilationDiagnostic = NotationIssue<CompilationCode>;
 
+/** Controls which standard score markings are visible in compiled output. */
+export interface ScorePresentationOptions {
+  /** Whether to show the percussion clef; defaults to true. */
+  readonly showClef?: boolean;
+  /** Whether to show written time signatures; defaults to true. */
+  readonly showTimeSignature?: boolean;
+  /** Whether to show the final barline of the score; defaults to true. */
+  readonly showFinalBarline?: boolean;
+}
+
 export interface MusicXmlCompileOptions {
   readonly strict?: boolean;
+  /** Optional visual controls applied to MusicXML and browser SVG output. */
+  readonly presentation?: ScorePresentationOptions;
 }
 
 export interface MusicXmlCompileResult {

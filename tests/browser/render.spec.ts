@@ -73,6 +73,22 @@ async function staffLineSystems(
   });
 }
 
+async function renderWithPresentation(
+  page: import("@playwright/test").Page,
+  notation: "bar" | "phrase",
+): Promise<string> {
+  await page.goto("/tests/browser/fixture.html");
+  return page.evaluate(
+    async (input) =>
+      window.renderPresentationFixture(input, {
+        showClef: false,
+        showTimeSignature: false,
+        showFinalBarline: false,
+      }),
+    notation,
+  );
+}
+
 test("an already-aborted signal clears an existing score and reports RENDER_ABORTED", async ({
   page,
 }) => {
@@ -119,6 +135,26 @@ test("empty bar renders a five-line percussion staff", async ({ page }) => {
   expect(systems).not.toHaveLength(0);
   expect(systems.every((lineCount) => lineCount === 5)).toBe(true);
   expect(musicXml).not.toContain("<unpitched>");
+});
+
+test("presentation options hide score markings in MusicXML and SVG", async ({ page }) => {
+  const musicXml = await renderWithPresentation(page, "phrase");
+  const svg = page.locator("#target svg");
+
+  expect(musicXml).toContain('<clef number="1" print-object="no">');
+  expect(musicXml).toContain('<time print-object="no">');
+  expect(musicXml).toContain("<bar-style>regular</bar-style>");
+  expect(musicXml).toContain("<bar-style>none</bar-style>");
+  await expect(svg.locator("g.vf-clef")).toHaveCount(0);
+  await expect(svg.locator("g.vf-timesignature")).toHaveCount(0);
+  await expect(svg.locator("g.vf-notehead")).not.toHaveCount(0);
+
+  const barlineRectCounts = await svg.evaluate((score) =>
+    [...score.querySelectorAll("g.staffline > g.vf-measure")].map(
+      (measure) => measure.querySelectorAll(":scope > rect").length,
+    ),
+  );
+  expect(barlineRectCounts).toEqual([1, 0]);
 });
 
 for (const fixture of [

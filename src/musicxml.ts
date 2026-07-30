@@ -31,6 +31,12 @@ interface EventDisplay {
   readonly graceDisplay: VoiceDisplay;
 }
 
+interface ResolvedScorePresentationOptions {
+  readonly showClef: boolean;
+  readonly showTimeSignature: boolean;
+  readonly showFinalBarline: boolean;
+}
+
 const NOTE_TYPES: Readonly<Record<number, string>> = {
   1: "whole",
   2: "half",
@@ -368,17 +374,33 @@ function musicXmlDivisionsFor(bar: Bar<any>): number {
   return (bar.timing.denominator * bar.timing.subdivisionsPerUnit) / divisionFactor;
 }
 
-function attributesXml(bar: Bar<any>, previous: Bar<any> | undefined): string {
+function resolvePresentationOptions(
+  options: MusicXmlCompileOptions,
+): ResolvedScorePresentationOptions {
+  return {
+    showClef: options.presentation?.showClef ?? true,
+    showTimeSignature: options.presentation?.showTimeSignature ?? true,
+    showFinalBarline: options.presentation?.showFinalBarline ?? true,
+  };
+}
+
+function attributesXml(
+  bar: Bar<any>,
+  previous: Bar<any> | undefined,
+  presentation: ResolvedScorePresentationOptions,
+): string {
   const attributes = [
     ...(!previous || musicXmlDivisionsFor(previous) !== musicXmlDivisionsFor(bar)
       ? [`<divisions>${musicXmlDivisionsFor(bar)}</divisions>`]
       : []),
     ...(!previous || previous.meter !== bar.meter
-      ? [`<time><beats>${bar.timing.numerator}</beats><beat-type>${bar.timing.denominator}</beat-type></time>`]
+      ? [
+          `<time${presentation.showTimeSignature ? "" : ' print-object="no"'}><beats>${bar.timing.numerator}</beats><beat-type>${bar.timing.denominator}</beat-type></time>`,
+        ]
       : []),
     ...(!previous
       ? [
-          '<clef number="1"><sign>percussion</sign><line>2</line></clef>',
+          `<clef number="1"${presentation.showClef ? "" : ' print-object="no"'}><sign>percussion</sign><line>2</line></clef>`,
           '<staff-details number="1"><staff-lines>5</staff-lines></staff-details>',
         ]
       : []),
@@ -391,6 +413,7 @@ function measureXml(
   number: number,
   previous: Bar<any> | undefined,
   final: boolean,
+  presentation: ResolvedScorePresentationOptions,
   diagnostics: CompilationDiagnostic[],
   diagnosticPrefix: string,
 ): string {
@@ -411,7 +434,7 @@ function measureXml(
     return notation;
   });
   const segmentTypes = segmentNotations.map((notation) => notation.typeDenominator);
-  const measure = [attributesXml(bar, previous)];
+  const measure = [attributesXml(bar, previous, presentation)];
 
   for (const [index, segment] of segments.entries()) {
     const notation = segmentNotations[index]!;
@@ -448,7 +471,9 @@ function measureXml(
     }
   }
   measure.push(
-    `<barline location="right"><bar-style>${final ? "light-heavy" : "regular"}</bar-style></barline>`,
+    `<barline location="right"><bar-style>${
+      final && !presentation.showFinalBarline ? "none" : final ? "light-heavy" : "regular"
+    }</bar-style></barline>`,
   );
   return `<measure number="${number}">${measure.join("")}</measure>`;
 }
@@ -460,12 +485,14 @@ export function compileMusicXml(
 ): MusicXmlCompileResult {
   const diagnostics: CompilationDiagnostic[] = [];
   const bars = barsFor(input);
+  const presentation = resolvePresentationOptions(options);
   const measures = bars.map((bar, index) =>
     measureXml(
       bar,
       index + 1,
       bars[index - 1],
       index === bars.length - 1,
+      presentation,
       diagnostics,
       input instanceof Phrase ? `bars[${index}].` : "",
     ),

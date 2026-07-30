@@ -63,6 +63,21 @@ const { svg, dispose } = await renderPhraseToSvg(phrase, document.querySelector(
 
 `Phrase` deliberately has no name, repeat marks, labels, or visible measure numbers. A chart editor can expand repeated material into its bars and present repeat counts or section text alongside the rendered phrase.
 
+### Score presentation
+
+Pass `presentation` to hide standard score markings in both the returned MusicXML and browser SVG. All markings are visible by default. A hidden clef or time signature remains in MusicXML with `print-object="no"`, so the written meter and percussion context are retained. A hidden final barline is emitted with MusicXML `bar-style` `none`; in a phrase, this applies only to the final measure.
+
+```ts
+const presentation = {
+  showClef: false,
+  showTimeSignature: false,
+  showFinalBarline: false,
+};
+
+const { musicXml } = compileMusicXml(bar, { presentation });
+const { svg, dispose } = await renderBarToSvg(bar, chart, { presentation });
+```
+
 ## Input model
 
 - `meter` is a string such as `"4/4"` or `"6/8"`. Supported denominators are 1, 2, 4, 8, 16, and 32.
@@ -98,7 +113,7 @@ Each standard-kit hit has at most one primary technique. Snare accepts `normal`,
 
 ## MusicXML and SVG guarantees
 
-The compiler produces a one-part MusicXML 4.0 `score-partwise` document with percussion clef, MIDI channel 10 instruments, a true five-line staff, time signature, rhythm inferred from attack spacing, rests, chords, beams, tuplets, and final barline. A phrase compiles into ordered MusicXML measures and repeats attributes only when a meter or MusicXML division value changes. SVG rendering is delegated to OpenSheetMusicDisplay 2.1.0, loaded only by the browser renderer.
+The compiler produces a one-part MusicXML 4.0 `score-partwise` document with MIDI channel 10 instruments, a true five-line staff, rhythm inferred from attack spacing, rests, chords, beams, and tuplets. By default it also shows a percussion clef, time signature, and final barline; `presentation` can hide those markings without removing their MusicXML semantics. A phrase compiles into ordered MusicXML measures and repeats attributes only when a meter or MusicXML division value changes. SVG rendering is delegated to OpenSheetMusicDisplay 2.1.0, loaded only by the browser renderer.
 
 `compileMusicXml()` is usable in Node and browser environments. `renderBarToSvg()` and `renderPhraseToSvg()` are browser-only. Playback, MIDI output, PDF output, React bindings, repeat conventions, and application-specific DBZDrums adapters are deliberately outside v0.1.
 
