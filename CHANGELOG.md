@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0
+
+### Minor Changes
+
+- 8d73061: Add position-anchored text annotations to bars and phrases, plus an SVG-only `repeatCount` rendering option and playground control.
+
+### Patch Changes
+
+- 60e612a: Publish complete public API documentation and a version-matched `library-skills` Agent Skill for coding agents.
+- 092b0b4: Add guarded Makefile targets for preparing, validating, tagging, and atomically pushing package releases.
+
 ## 0.2.1
 
 ### Patch Changes
