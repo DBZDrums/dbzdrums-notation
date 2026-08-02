@@ -1,0 +1,38 @@
+{
+  "$schema": "./node_modules/typedoc-plugin-markdown/typedoc-plugin-markdown.schema.json",
+  "entryPoints": ["src/index.ts"],
+  "entryPointStrategy": "resolve",
+  "tsconfig": "tsconfig.json",
+  "out": "docs/public-api/reference",
+  "plugin": ["typedoc-plugin-markdown"],
+  "name": "@dbzdrums/notation",
+  "readme": "none",
+  "cleanOutputDir": true,
+  "disableSources": true,
+  "excludeExternals": true,
+  "excludeInternal": true,
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "entryFileName": "index",
+  "hideBreadcrumbs": true,
+  "hideGenerator": true,
+  "indexFormat": "table",
+  "formatWithPrettier": true,
+  "useCodeBlocks": true,
+  "sort": ["kind", "alphabetical"],
+  "requiredToBeDocumented": [
+    "Variable",
+    "Function",
+    "Class",
+    "Interface",
+    "TypeAlias",
+    "Method",
+    "Constructor"
+  ],
+  "validation": {
+    "invalidLink": true,
+    "notDocumented": true,
+    "notExported": true
+  },
+  "treatValidationWarningsAsErrors": true
+}

@@ -25,10 +25,24 @@ function freezeVoice<T extends DrumVoiceDefinition>(voice: T): T {
   }) as T;
 }
 
-/** Defines and validates a deterministic percussion-kit mapping. */
+/**
+ * Defines, validates, copies, and freezes a deterministic percussion-kit mapping.
+ *
+ * Literal voice and articulation ids are preserved in the return type so that
+ * {@link BarDefinition.hits} and {@link Bar.add} remain kit-specific.
+ *
+ * @param definition - Kit identity, display name, and voice definitions.
+ * @returns A deeply frozen drum-kit value.
+ * @throws {@link NotationValidationError} with `INVALID_KIT` issues when kit or
+ * voice ids are malformed, voice orders are not unique integers, MIDI values are
+ * outside 1 through 127, or a default articulation id is unknown.
+ */
 export function defineDrumKit<V extends VoiceMap>(definition: {
+  /** Id starting with a letter, followed by letters, digits, or hyphens. */
   readonly id: string;
+  /** Human-readable MusicXML part name. */
   readonly name: string;
+  /** Voice definitions keyed by ids with the same format as the kit id. */
   readonly voices: V;
 }): DrumKit<V> {
   const issues: NotationIssue<ValidationCode>[] = [];
@@ -90,6 +104,13 @@ export function defineDrumKit<V extends VoiceMap>(definition: {
   });
 }
 
+/**
+ * Built-in immutable drum kit used when {@link BarDefinition.kit} is omitted.
+ *
+ * It defines `bassDrum`, `floorTom`, `snare`, `tom2`, `tom1`, `ride`, `hiHat`,
+ * and `crash`. Snare supports `normal`, `rim`, and `flam`; hi-hat supports
+ * `closed`, `open`, and `pedal`; every other voice supports `normal`.
+ */
 export const standardDrumKit = defineDrumKit({
   id: "standard-drum-kit",
   name: "Standard drum kit",

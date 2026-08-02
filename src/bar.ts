@@ -100,22 +100,48 @@ function resolveArticulations(
   return Object.freeze([...requested]);
 }
 
+/**
+ * Derived, immutable timing metadata exposed by a validated {@link Bar}.
+ *
+ * @inline
+ */
 export interface BarTiming {
+  /** Positive meter numerator. */
   readonly numerator: number;
+  /** Supported meter denominator. */
   readonly denominator: number;
+  /** Number of authored grid positions in each written unit. */
   readonly subdivisionsPerUnit: number;
 }
 
-/** Immutable, validated one-bar drum notation input. */
+/**
+ * An immutable, validated bar of drum notation.
+ *
+ * Construction copies and freezes grouping, normalized events, annotations,
+ * and timing metadata. The selected drum-kit instance is retained by identity.
+ */
 export class Bar<K extends DrumKit = typeof standardDrumKit> {
+  /** Canonical written meter. */
   readonly meter: Meter;
+  /** Total number of grid positions in the bar. */
   readonly divisions: number;
+  /** Explicit beam grouping, or `undefined` when compiler defaults apply. */
   readonly grouping: readonly number[] | undefined;
+  /** Drum-kit instance used to validate and compile this bar. */
   readonly kit: K;
+  /** Normalized attacks sorted by grid slot and then drum-voice order. */
   readonly events: readonly BarEvent[];
+  /** Normalized text annotations in authoring order. */
   readonly annotations: readonly BarTextAnnotation[];
+  /** Derived meter and grid values. */
   readonly timing: BarTiming;
 
+  /**
+   * Creates a validated bar.
+   *
+   * @param definition - Meter, grid, optional kit, hits, grouping, and annotations.
+   * @throws {@link NotationValidationError} with every detected validation issue.
+   */
   constructor(definition: BarDefinition<K>) {
     const issues: NotationIssue<ValidationCode>[] = [];
     const parsedMeter = parseMeter(definition.meter);
@@ -299,7 +325,18 @@ export class Bar<K extends DrumKit = typeof standardDrumKit> {
     Object.freeze(this);
   }
 
-  /** Adds one or more hits without mutating the source bar. */
+  /**
+   * Adds the supplied hits without mutating this bar.
+   *
+   * Existing normalized hits and annotations are preserved in the returned bar.
+   * An empty `hits` rest argument returns a newly validated equivalent bar.
+   *
+   * @param voice - Voice id from this bar's drum kit.
+   * @param hits - Positions or articulated hit objects to append.
+   * @returns A newly validated immutable bar using the same kit instance.
+   * @throws {@link NotationValidationError} if an addition conflicts with existing
+   * hits or violates any bar, position, voice, or articulation constraint.
+   */
   add<V extends VoiceId<K>>(
     voice: V,
     ...hits: readonly HitInput<ArticulationId<K, V>>[]

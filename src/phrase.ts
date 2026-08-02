@@ -9,12 +9,27 @@ import type {
 } from "./types.js";
 import { parseTextAnnotation } from "./validation.js";
 
-/** Immutable, ordered multi-bar drum notation input. */
+/**
+ * An immutable, ordered, non-empty sequence of existing {@link Bar} values.
+ *
+ * Bars may use different meters, divisions, and groupings, but must retain the
+ * exact same drum-kit instance. A phrase has no name or repeat semantics.
+ */
 export class Phrase<K extends DrumKit = DrumKit> {
+  /** Frozen array of bars in score order. Bar instances are retained by reference. */
   readonly bars: readonly Bar<K>[];
+  /** Shared drum-kit instance, taken from the first bar. */
   readonly kit: K;
+  /** Normalized annotations that target specific zero-based bar occurrences. */
   readonly annotations: readonly PhraseTextAnnotation[];
 
+  /**
+   * Creates a validated phrase.
+   *
+   * @param definition - Ordered bars and optional occurrence-specific annotations.
+   * @throws {@link NotationValidationError} if bars are absent, empty, invalid, use
+   * different kit instances, or if any phrase annotation is invalid.
+   */
   constructor(definition: PhraseDefinition<K>) {
     const issues: NotationIssue<ValidationCode>[] = [];
     const bars = definition.bars;

@@ -383,6 +383,11 @@ function textAnnotationXml(
   ].join("");
 }
 
+/**
+ * Validated notation accepted by the public compiler.
+ *
+ * @inline
+ */
 type NotationInput = Bar<any> | Phrase<any>;
 
 function barsFor(input: NotationInput): readonly Bar<any>[] {
@@ -505,7 +510,22 @@ function measureXml(
   return `<measure number="${number}">${measure.join("")}</measure>`;
 }
 
-/** Compiles an immutable Bar or Phrase to a complete, deterministic MusicXML score. */
+/**
+ * Compiles an immutable {@link Bar} or {@link Phrase} to a complete,
+ * deterministic MusicXML 4.0 `score-partwise` document.
+ *
+ * The compiler is synchronous and works in Node.js and browser environments.
+ * It emits one percussion part on MIDI channel 10, a five-line staff, inferred
+ * note and rest durations, chords, beams, tuplets, annotations, and requested
+ * score-presentation settings. It does not mutate its input.
+ *
+ * @param input - Validated bar or ordered phrase to compile.
+ * @param options - Strict diagnostic handling and score presentation controls.
+ * @returns Frozen MusicXML text and an ordered, frozen diagnostics array.
+ * @throws {@link NotationCompilationError} when `options.strict` is `true` and
+ * any degradation diagnostic is produced, or when a rhythmic subdivision cannot
+ * be represented by the supported MusicXML note types.
+ */
 export function compileMusicXml(
   input: NotationInput,
   options: MusicXmlCompileOptions = {},

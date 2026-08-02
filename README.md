@@ -9,6 +9,7 @@ This README is the documentation for library users. Other audiences have dedicat
 - [Contributors](CONTRIBUTING.md) — local development, tests, changesets, and pull requests.
 - [Coding agents](AGENTS.md) — repository boundaries, safe working rules, and required validation.
 - [Generative-AI use disclosure](AI_DISCLOSURE.md) — scope, accountability, and limits of AI assistance.
+- [Public API](docs/public-api/index.md) — complete installed-version concepts, examples, errors, and generated reference.
 - [Architecture](docs/architecture.md) — shared technical boundaries and design decisions.
 - [Release process](docs/releasing.md) — version tags, approval, and package publication.
 
@@ -16,6 +17,14 @@ This README is the documentation for library users. Other audiences have dedicat
 
 ```sh
 npm install @dbzdrums/notation
+```
+
+The npm package includes the [complete public API documentation](docs/public-api/index.md)
+and an official [Agent Skill](.agents/skills/dbzdrums-notation/SKILL.md). Agents can optionally
+discover installed library skills with:
+
+```sh
+npx library-skills
 ```
 
 ## Use

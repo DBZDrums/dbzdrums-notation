@@ -1,3 +1,10 @@
+/**
+ * Public entrypoint for authoring validated drum notation, compiling MusicXML,
+ * and rendering browser SVG scores.
+ *
+ * @packageDocumentation
+ */
+
 export { Bar } from "./bar.js";
 export { Phrase } from "./phrase.js";
 export {

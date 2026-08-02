@@ -34,6 +34,8 @@
   },
   "files": [
     "dist",
+    "docs/public-api",
+    ".agents/skills/dbzdrums-notation",
     "README.md",
     "LICENSE"
   ],
@@ -49,13 +51,15 @@
     "dev": "vite",
     "preview": "vite preview",
     "build": "tsup",
+    "docs:generate": "typedoc --options typedoc.json",
+    "docs:check": "node scripts/check-public-api-docs.mjs",
     "typecheck": "tsc --noEmit",
     "test": "npm run test:unit",
     "test:unit": "vitest run",
     "test:browser": "playwright test",
     "setup:browsers": "playwright install chromium firefox",
     "pack:check": "npm pack --dry-run",
-    "check": "npm run typecheck && npm run test:unit && npm run build",
+    "check": "npm run typecheck && npm run test:unit && npm run build && npm run docs:check",
     "prepack": "npm run check"
   },
   "dependencies": {
@@ -66,7 +70,10 @@
     "@playwright/test": "1.62.0",
     "@types/node": "24.13.3",
     "@xmldom/xmldom": "0.8.13",
+    "prettier": "3.9.6",
     "tsup": "8.5.1",
+    "typedoc": "0.28.20",
+    "typedoc-plugin-markdown": "4.12.0",
     "typescript": "6.0.3",
     "vite": "8.1.5",
     "vitest": "4.1.10"
