@@ -194,6 +194,57 @@ describe("compileMusicXml", () => {
     expect(() => compileMusicXml(bar, { strict: true })).toThrow(NotationCompilationError);
   });
 
+  it("writes escaped text directions at exact grid offsets without changing rhythm", () => {
+    const { document } = documentFor(
+      new Bar({
+        meter: "4/4",
+        divisions: 8,
+        hits: { hiHat: ["1.0", "1.1", "2.0", "2.1", "3.0", "3.1", "4.0", "4.1"] },
+        annotations: [
+          { at: "2.1", text: "Count & listen", placement: "above" },
+          { at: "1.0", text: "Lyrics starts" },
+        ],
+      }),
+    );
+    const directions = children(document, "direction");
+
+    expect(directions).toHaveLength(2);
+    expect(directions.map((direction) => direction.getAttribute("placement"))).toEqual([
+      "below",
+      "above",
+    ]);
+    expect(directions.map((direction) => text(direction.getElementsByTagName("words")[0]))).toEqual([
+      "Lyrics starts",
+      "Count & listen",
+    ]);
+    expect(directions.map((direction) => text(direction.getElementsByTagName("offset")[0]))).toEqual([
+      "0",
+      "3",
+    ]);
+    expect(nonChordDurationTotal(document)).toBe(8);
+  });
+
+  it("combines reusable bar annotations with phrase occurrence annotations", () => {
+    const first = new Bar({
+      meter: "4/4",
+      divisions: 8,
+      annotations: [{ at: "1.0", text: "Every occurrence" }],
+    });
+    const phrase = new Phrase({
+      bars: [first, first],
+      annotations: [{ bar: 1, at: "2.0", text: "Only the second" }],
+    });
+    const { document } = documentFor(phrase);
+    const measures = children(document, "measure");
+
+    expect(
+      Array.from(measures[0]!.getElementsByTagName("words")).map((node) => text(node)),
+    ).toEqual(["Every occurrence"]);
+    expect(
+      Array.from(measures[1]!.getElementsByTagName("words")).map((node) => text(node)),
+    ).toEqual(["Every occurrence", "Only the second"]);
+  });
+
   it("compiles a phrase into ordered measures, including meter and division changes", () => {
     const phrase = new Phrase({
       bars: [

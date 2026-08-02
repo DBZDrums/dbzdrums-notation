@@ -41,6 +41,19 @@ const { svg, dispose } = await renderBarToSvg(bar, document.querySelector("#char
 
 `renderBarToSvg()` owns and clears its target container. The target must be connected to the document and have a positive width. Call `dispose()` when the chart is no longer needed.
 
+Attach a single-line comment to a grid position with `annotations`. Text is written as a standard MusicXML direction and defaults to placement below the staff.
+
+```ts
+const annotated = new Bar({
+  meter: "4/4",
+  divisions: 8,
+  hits: { snare: ["1.0", "3.0"] },
+  annotations: [{ at: "1.0", text: "Lyrics starts" }],
+});
+```
+
+Only one annotation per position and placement is allowed; one above and one below may share a position. Some exact musical instruction words, such as `Fine`, `Coda`, and `D.C.`, can be interpreted specially by OSMD rather than as neutral comments.
+
 Both SVG render functions accept an optional `signal` in `RenderOptions`. Cancellation is cooperative: it cannot interrupt synchronous OSMD work already in progress, but it prevents an obsolete result from being returned and clears the owned container at asynchronous checkpoints. An aborted render rejects with `NotationRenderError` code `"RENDER_ABORTED"`.
 
 ### Phrases
@@ -55,13 +68,14 @@ const phrase = new Phrase({
     new Bar({ meter: "4/4", divisions: 8, hits: { bassDrum: ["1.0", "3.0"] } }),
     new Bar({ meter: "6/8", divisions: 6, hits: { snare: ["3.0", "6.0"] } }),
   ],
+  annotations: [{ bar: 1, at: "3.0", text: "Build" }],
 });
 
 const { musicXml } = compileMusicXml(phrase);
 const { svg, dispose } = await renderPhraseToSvg(phrase, document.querySelector("#chart")!);
 ```
 
-`Phrase` deliberately has no name, repeat marks, labels, or visible measure numbers. A chart editor can expand repeated material into its bars and present repeat counts or section text alongside the rendered phrase.
+`Phrase` deliberately has no name, semantic repeat marks, or visible measure numbers. An annotation stored on a `Bar` appears on every occurrence of that bar; `Phrase.annotations` targets one occurrence by its zero-based `bar` index.
 
 ### Score presentation
 
@@ -76,6 +90,14 @@ const presentation = {
 
 const { musicXml } = compileMusicXml(bar, { presentation });
 const { svg, dispose } = await renderBarToSvg(bar, chart, { presentation });
+```
+
+SVG rendering also accepts `repeatCount`, a safe integer of 2 or greater. It adds a visual `xN` after the final barline, or after the staff end when the final barline is hidden. This is deliberately SVG-only: it does not change returned MusicXML or add semantic repeat marks.
+
+```ts
+const { svg, dispose } = await renderPhraseToSvg(phrase, chart, {
+  repeatCount: 3,
+});
 ```
 
 ## Input model
@@ -113,9 +135,9 @@ Each standard-kit hit has at most one primary technique. Snare accepts `normal`,
 
 ## MusicXML and SVG guarantees
 
-The compiler produces a one-part MusicXML 4.0 `score-partwise` document with MIDI channel 10 instruments, a true five-line staff, rhythm inferred from attack spacing, rests, chords, beams, and tuplets. By default it also shows a percussion clef, time signature, and final barline; `presentation` can hide those markings without removing their MusicXML semantics. A phrase compiles into ordered MusicXML measures and repeats attributes only when a meter or MusicXML division value changes. SVG rendering is delegated to OpenSheetMusicDisplay 2.1.0, loaded only by the browser renderer.
+The compiler produces a one-part MusicXML 4.0 `score-partwise` document with MIDI channel 10 instruments, a true five-line staff, rhythm inferred from attack spacing, rests, chords, beams, tuplets, and position-anchored text directions. By default it also shows a percussion clef, time signature, and final barline; `presentation` can hide those markings without removing their MusicXML semantics. A phrase compiles into ordered MusicXML measures and repeats attributes only when a meter or MusicXML division value changes. SVG rendering is delegated to OpenSheetMusicDisplay 2.1.0, loaded only by the browser renderer; visual `repeatCount` labels are added to the completed SVG.
 
-`compileMusicXml()` is usable in Node and browser environments. `renderBarToSvg()` and `renderPhraseToSvg()` are browser-only. Playback, MIDI output, PDF output, React bindings, repeat conventions, and application-specific DBZDrums adapters are deliberately outside v0.1.
+`compileMusicXml()` is usable in Node and browser environments. `renderBarToSvg()` and `renderPhraseToSvg()` are browser-only. Playback, MIDI output, PDF output, React bindings, semantic repeat conventions, and application-specific DBZDrums adapters are deliberately outside the package.
 
 ## Local development
 
@@ -132,8 +154,9 @@ npm run test:browser
 
 `npm run dev` opens the repository's interactive playground. It lets you toggle
 drum hits in a grid, add, duplicate, remove, and select bars in a phrase, edit
-the corresponding JSON definition, inspect the TypeScript call and MusicXML,
-download the generated `.musicxml`, and see the actual OSMD SVG. The playground
+annotations in the corresponding JSON definition, preview an optional visual
+repeat count, inspect the TypeScript call and MusicXML, download the generated
+`.musicxml`, and see the actual OSMD SVG. The playground
 is a development showcase, not part of the published package or its core runtime.
 
 Playwright runs the real renderer in Chromium and Firefox. It asserts five visible, full-length staff lines, barlines, rendered notehead glyph counts, no browser errors, and a compact visual-regression screenshot in each browser.

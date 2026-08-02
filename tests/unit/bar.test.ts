@@ -24,8 +24,12 @@ describe("Bar", () => {
     expect(Object.isFrozen(bar.events)).toBe(true);
   });
 
-  it("adds hits immutably", () => {
-    const original = new Bar({ meter: "4/4", divisions: 8 });
+  it("adds hits immutably and preserves text annotations", () => {
+    const original = new Bar({
+      meter: "4/4",
+      divisions: 8,
+      annotations: [{ at: "1.0", text: "Lyrics starts" }],
+    });
     const next = original.add("snare", "2.0", { at: "4.1", articulations: ["rim"] });
 
     expect(original.events).toHaveLength(0);
@@ -34,6 +38,11 @@ describe("Bar", () => {
       ["normal"],
       ["rim"],
     ]);
+    expect(next.annotations).toEqual([
+      { at: "1.0", text: "Lyrics starts", placement: "below" },
+    ]);
+    expect(Object.isFrozen(next.annotations)).toBe(true);
+    expect(Object.isFrozen(next.annotations[0])).toBe(true);
   });
 
   it.each([
@@ -45,6 +54,9 @@ describe("Bar", () => {
     [{ meter: "4/4", divisions: 8, hits: { snare: ["4.2"] } }, "POSITION_OUT_OF_RANGE"],
     [{ meter: "4/4", divisions: 8, hits: { cowbell: ["1.0"] } }, "UNKNOWN_VOICE"],
     [{ meter: "4/4", divisions: 8, hits: { snare: [{ at: "1.0", articulations: ["buzz"] }] } }, "UNKNOWN_ARTICULATION"],
+    [{ meter: "4/4", divisions: 8, annotations: [{ at: "4.2", text: "Late" }] }, "POSITION_OUT_OF_RANGE"],
+    [{ meter: "4/4", divisions: 8, annotations: [{ at: "1.0", text: "" }] }, "INVALID_ANNOTATION"],
+    [{ meter: "4/4", divisions: 8, annotations: [{ at: "1.0", text: "Two\nlines" }] }, "INVALID_ANNOTATION"],
   ] as const)("rejects %o", (definition, code) => {
     expect(() => createUnchecked(definition)).toThrow(NotationValidationError);
     try {
@@ -53,6 +65,17 @@ describe("Bar", () => {
       expect(error).toBeInstanceOf(NotationValidationError);
       expect((error as NotationValidationError).issues.map((issue) => issue.code)).toContain(code);
     }
+  });
+
+  it("rejects duplicate annotation anchors", () => {
+    expect(() => new Bar({
+      meter: "4/4",
+      divisions: 8,
+      annotations: [
+        { at: "1.0", text: "First" },
+        { at: "1.0", text: "Second", placement: "below" },
+      ],
+    })).toThrow(NotationValidationError);
   });
 
   it("rejects duplicate hits and incompatible primary articulations", () => {
@@ -141,6 +164,54 @@ describe("Phrase", () => {
       expect(error).toBeInstanceOf(NotationValidationError);
       expect((error as NotationValidationError).issues.map((issue) => issue.code)).toContain(code);
     }
+  });
+
+  it("keeps occurrence-specific annotations and rejects visual collisions", () => {
+    const first = new Bar({
+      meter: "4/4",
+      divisions: 8,
+      annotations: [{ at: "1.0", text: "Bar note", placement: "below" }],
+    });
+    const second = new Bar({ meter: "4/4", divisions: 8 });
+    const phrase = new Phrase({
+      bars: [first, second],
+      annotations: [
+        { bar: 0, at: "1.0", text: "Above", placement: "above" },
+        { bar: 1, at: "2.1", text: "Second bar" },
+      ],
+    });
+
+    expect(phrase.annotations).toEqual([
+      { bar: 0, at: "1.0", text: "Above", placement: "above" },
+      { bar: 1, at: "2.1", text: "Second bar", placement: "below" },
+    ]);
+    expect(Object.isFrozen(phrase.annotations)).toBe(true);
+    expect(Object.isFrozen(phrase.annotations[0])).toBe(true);
+
+    expect(() => new Phrase({
+      bars: [first],
+      annotations: [{ bar: 0, at: "1.0", text: "Collision" }],
+    })).toThrow(NotationValidationError);
+    try {
+      new Phrase({
+        bars: [first],
+        annotations: [{ bar: 0, at: "1.0", text: "Collision" }],
+      });
+    } catch (error) {
+      expect((error as NotationValidationError).issues[0]?.code).toBe("DUPLICATE_ANNOTATION");
+    }
+  });
+
+  it("rejects phrase annotations outside their target bar", () => {
+    const bar = new Bar({ meter: "4/4", divisions: 8 });
+    expect(() => new Phrase({
+      bars: [bar],
+      annotations: [{ bar: 1, at: "1.0", text: "Missing bar" }],
+    })).toThrow(NotationValidationError);
+    expect(() => new Phrase({
+      bars: [bar],
+      annotations: [{ bar: 0, at: "4.2", text: "Missing position" }],
+    })).toThrow(NotationValidationError);
   });
 
   it("requires all bars to use the same kit instance", () => {

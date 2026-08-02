@@ -7,6 +7,7 @@ import type { RenderOptions, RenderResult } from "../types.js";
 interface OsmdInstance {
   readonly EngravingRules: {
     PageBottomMargin: number;
+    PageRightMargin: number;
     PercussionOneLineCutoff: number;
     RenderClefsAtBeginningOfStaffline: boolean;
     RenderTimeSignatures: boolean;
@@ -30,6 +31,15 @@ interface HorizontalLine {
   readonly x2: number;
   readonly y: number;
   readonly length: number;
+}
+
+interface SvgBounds {
+  readonly left: number;
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+  readonly width: number;
+  readonly height: number;
 }
 
 function parsePathLines(path: string): readonly HorizontalLine[] {
@@ -108,6 +118,141 @@ export function countStaffLines(svg: SVGSVGElement): number {
 
 type NotationInput = Bar<any> | Phrase<any>;
 
+function validateRenderOptions(options: RenderOptions): void {
+  if (
+    options.repeatCount !== undefined &&
+    (!Number.isSafeInteger(options.repeatCount) || options.repeatCount < 2)
+  ) {
+    throw new NotationRenderError(
+      "RENDER_OPTIONS_INVALID",
+      "repeatCount must be a safe integer greater than or equal to 2."
+    );
+  }
+}
+
+function boundsInSvg(
+  svg: SVGSVGElement,
+  element: SVGGraphicsElement
+): SvgBounds | undefined {
+  const screenMatrix = svg.getScreenCTM();
+  if (!screenMatrix) return undefined;
+  let inverse: DOMMatrix;
+  try {
+    inverse = screenMatrix.inverse();
+  } catch {
+    return undefined;
+  }
+  const rect = element.getBoundingClientRect();
+  const corners = [
+    [rect.left, rect.top],
+    [rect.right, rect.top],
+    [rect.left, rect.bottom],
+    [rect.right, rect.bottom],
+  ].map(([x, y]) => {
+    const point = svg.createSVGPoint();
+    point.x = x!;
+    point.y = y!;
+    return point.matrixTransform(inverse);
+  });
+  const xValues = corners.map((point) => point.x);
+  const yValues = corners.map((point) => point.y);
+  const left = Math.min(...xValues);
+  const right = Math.max(...xValues);
+  const top = Math.min(...yValues);
+  const bottom = Math.max(...yValues);
+  if (![left, right, top, bottom].every(Number.isFinite)) return undefined;
+  return { left, top, right, bottom, width: right - left, height: bottom - top };
+}
+
+function appendRepeatLabel(svg: SVGSVGElement, repeatCount: number): void {
+  const staffLines = [...svg.querySelectorAll<SVGGElement>("g.staffline")];
+  const finalStaffLine = staffLines.at(-1);
+  const measures = finalStaffLine
+    ? [...finalStaffLine.querySelectorAll<SVGGElement>(":scope > g.vf-measure")]
+    : [];
+  const finalMeasure = measures.at(-1);
+  if (!finalMeasure) {
+    throw new NotationRenderError(
+      "REPEAT_LABEL_RENDER_FAILED",
+      "Could not locate the final rendered measure for the repeat label."
+    );
+  }
+
+  const pathBounds = [...finalMeasure.querySelectorAll<SVGGraphicsElement>(":scope > path")]
+    .map((path) => boundsInSvg(svg, path))
+    .filter((bounds): bounds is SvgBounds =>
+      bounds !== undefined && bounds.width > Math.max(1, bounds.height * 5)
+    );
+  const longestPath = Math.max(0, ...pathBounds.map((bounds) => bounds.width));
+  const staffLineBounds = pathBounds.filter((bounds) => bounds.width >= longestPath * 0.8);
+  if (staffLineBounds.length !== 5) {
+    throw new NotationRenderError(
+      "REPEAT_LABEL_RENDER_FAILED",
+      `Expected five final staff lines for the repeat label; found ${staffLineBounds.length}.`
+    );
+  }
+
+  const centers = staffLineBounds
+    .map((bounds) => (bounds.top + bounds.bottom) / 2)
+    .sort((left, right) => left - right);
+  const distances = centers.slice(1).map((center, index) => center - centers[index]!);
+  const staffSpace = distances.reduce((total, distance) => total + distance, 0) /
+    distances.length;
+  if (!Number.isFinite(staffSpace) || staffSpace <= 0) {
+    throw new NotationRenderError(
+      "REPEAT_LABEL_RENDER_FAILED",
+      "Could not derive final staff spacing for the repeat label."
+    );
+  }
+
+  const staffRight = Math.max(...staffLineBounds.map((bounds) => bounds.right));
+  const barlineBounds = [...finalMeasure.querySelectorAll<SVGGraphicsElement>(":scope > rect")]
+    .map((rect) => boundsInSvg(svg, rect))
+    .filter((bounds): bounds is SvgBounds => bounds !== undefined);
+  const visualEnd = Math.max(
+    staffRight,
+    ...barlineBounds.map((bounds) => bounds.right)
+  );
+  const bottomLine = Math.max(...centers);
+  const fontSize = staffSpace * 2.0;
+  const horizontalGap = staffSpace * 0.6;
+  const baselineOffset = staffSpace * 0.0;
+
+  const namespace = "http://www.w3.org/2000/svg";
+  const group = document.createElementNS(namespace, "g");
+  group.dataset.dbzRepeatLabel = "true";
+  group.setAttribute("pointer-events", "none");
+  const text = document.createElementNS(namespace, "text");
+  text.dataset.repeatCount = String(repeatCount);
+  text.setAttribute("x", String(visualEnd + horizontalGap));
+  text.setAttribute("y", String(bottomLine + baselineOffset));
+  text.setAttribute("fill", "#000000");
+  text.setAttribute("font-family", "Times New Roman, serif");
+  text.setAttribute("font-size", String(fontSize));
+  text.setAttribute("font-style", "normal");
+  text.setAttribute("font-weight", "normal");
+  text.textContent = `x${repeatCount}`;
+  group.append(text);
+  svg.append(group);
+
+  const labelBounds = boundsInSvg(svg, text);
+  const viewBox = svg.viewBox.baseVal;
+  const tolerance = 0.5;
+  if (
+    !labelBounds ||
+    labelBounds.left < viewBox.x - tolerance ||
+    labelBounds.top < viewBox.y - tolerance ||
+    labelBounds.right > viewBox.x + viewBox.width + tolerance ||
+    labelBounds.bottom > viewBox.y + viewBox.height + tolerance
+  ) {
+    group.remove();
+    throw new NotationRenderError(
+      "REPEAT_LABEL_RENDER_FAILED",
+      "The repeat label did not fit inside the rendered SVG viewport."
+    );
+  }
+}
+
 function clearOwnedRender(
   container: HTMLElement,
   display: OsmdInstance | undefined
@@ -146,6 +291,7 @@ async function renderNotationToSvg(
   options: RenderOptions = {}
 ): Promise<RenderResult> {
   throwIfRenderAborted(options.signal, container, undefined);
+  validateRenderOptions(options);
   if (!container.isConnected || container.getBoundingClientRect().width <= 0) {
     throw new NotationRenderError(
       "RENDER_TARGET_INVALID",
@@ -180,7 +326,16 @@ async function renderNotationToSvg(
       options.presentation?.showTimeSignature !== false;
     // compacttight sets this margin to zero, which can clip the bottom staff
     // line at particular browser zoom levels. OSMD recommends a small margin.
-    display.EngravingRules.PageBottomMargin = 0.3;
+    display.EngravingRules.PageBottomMargin = options.repeatCount === undefined ? 0.3 : 2.2;
+    if (options.repeatCount !== undefined) {
+      const currentRightMargin = Number.isFinite(display.EngravingRules.PageRightMargin)
+        ? display.EngravingRules.PageRightMargin
+        : 0;
+      display.EngravingRules.PageRightMargin = Math.max(
+        currentRightMargin,
+        `x${options.repeatCount}`.length * 0.8 + 1.5
+      );
+    }
     // OSMD otherwise collapses sparse percussion, including an empty Bar, to a
     // one-line staff. This package always promises five-line drum notation.
     display.EngravingRules.PercussionOneLineCutoff = 0;
@@ -221,6 +376,20 @@ async function renderNotationToSvg(
         staffLineSystems.join(", ") || "none"
       }.`
     );
+  }
+
+  if (options.repeatCount !== undefined) {
+    try {
+      appendRepeatLabel(svg, options.repeatCount);
+    } catch (error) {
+      clearOwnedRender(container, display);
+      if (error instanceof NotationRenderError) throw error;
+      throw new NotationRenderError(
+        "REPEAT_LABEL_RENDER_FAILED",
+        "Could not add the repeat label to the rendered SVG.",
+        { cause: error }
+      );
+    }
   }
 
   throwIfRenderAborted(options.signal, container, display);

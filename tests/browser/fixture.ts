@@ -24,6 +24,13 @@ declare global {
       notation: "bar" | "phrase",
       presentation: ScorePresentationOptions,
     ) => Promise<string>;
+    renderRepeatFixture: (
+      notation: "bar" | "phrase",
+      repeatCount: number,
+      showFinalBarline?: boolean,
+      zoom?: number,
+    ) => Promise<string>;
+    renderAnnotationFixture: () => Promise<string>;
     abortNotationFixture: (
       notation: "bar" | "phrase",
       timing: "alreadyAborted" | "afterStart"
@@ -156,6 +163,48 @@ window.renderPresentationFixture = async (notation, presentation) => {
   const result = input instanceof Phrase
     ? await renderPhraseToSvg(input, target, { presentation })
     : await renderBarToSvg(input, target, { presentation });
+  return result.musicXml;
+};
+
+window.renderRepeatFixture = async (
+  notation,
+  repeatCount,
+  showFinalBarline = true,
+  zoom,
+) => {
+  const target = document.querySelector("#target");
+  if (!(target instanceof HTMLElement)) {
+    throw new Error("Missing fixture target.");
+  }
+  const input = notation === "phrase"
+    ? new Phrase({ bars: Array.from({ length: 8 }, (_, index) =>
+        barFor(index % 2 === 0 ? "straight" : "chord")) })
+    : barFor("straight");
+  const options = {
+    repeatCount,
+    presentation: { showFinalBarline },
+    ...(zoom === undefined ? {} : { zoom }),
+  };
+  const result = input instanceof Phrase
+    ? await renderPhraseToSvg(input, target, options)
+    : await renderBarToSvg(input, target, options);
+  return result.musicXml;
+};
+
+window.renderAnnotationFixture = async () => {
+  const target = document.querySelector("#target");
+  if (!(target instanceof HTMLElement)) {
+    throw new Error("Missing fixture target.");
+  }
+  const result = await renderBarToSvg(
+    new Bar({
+      meter: "4/4",
+      divisions: 8,
+      hits: { snare: ["1.0", "3.0"] },
+      annotations: [{ at: "1.0", text: "Lyrics starts" }],
+    }),
+    target,
+  );
   return result.musicXml;
 };
 

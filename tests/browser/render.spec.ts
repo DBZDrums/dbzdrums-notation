@@ -193,6 +193,144 @@ test("presentation options hide score markings in MusicXML and SVG", async ({ pa
   expect(barlineRectCounts).toEqual([1, 0]);
 });
 
+async function repeatLabelGeometry(
+  page: import("@playwright/test").Page,
+): Promise<{
+  readonly text: string | null;
+  readonly labelLeft: number;
+  readonly labelTop: number;
+  readonly labelRight: number;
+  readonly labelBottom: number;
+  readonly visualEnd: number;
+  readonly staffBottom: number;
+  readonly svgRight: number;
+  readonly svgBottom: number;
+  readonly finalBarlineCount: number;
+}> {
+  return page.locator("#target svg").evaluate((svg) => {
+    const finalStaff = [...svg.querySelectorAll<SVGGElement>("g.staffline")].at(-1);
+    const finalMeasure = finalStaff
+      ? [...finalStaff.querySelectorAll<SVGGElement>(":scope > g.vf-measure")].at(-1)
+      : undefined;
+    const label = svg.querySelector<SVGTextElement>("g[data-dbz-repeat-label] > text");
+    if (!finalMeasure || !label) throw new Error("Missing final measure or repeat label.");
+    const staffLines = [...finalMeasure.querySelectorAll<SVGGraphicsElement>(":scope > path")]
+      .map((path) => path.getBoundingClientRect())
+      .filter((bounds) => bounds.width > Math.max(1, bounds.height * 5));
+    const longest = Math.max(...staffLines.map((bounds) => bounds.width));
+    const finalLines = staffLines.filter((bounds) => bounds.width >= longest * 0.8);
+    const barlines = [...finalMeasure.querySelectorAll<SVGGraphicsElement>(":scope > rect")]
+      .map((barline) => barline.getBoundingClientRect());
+    const labelBounds = label.getBoundingClientRect();
+    const svgBounds = svg.getBoundingClientRect();
+    return {
+      text: label.textContent,
+      labelLeft: labelBounds.left,
+      labelTop: labelBounds.top,
+      labelRight: labelBounds.right,
+      labelBottom: labelBounds.bottom,
+      visualEnd: Math.max(
+        ...finalLines.map((bounds) => bounds.right),
+        ...barlines.map((bounds) => bounds.right),
+      ),
+      staffBottom: Math.max(...finalLines.map((bounds) => bounds.bottom)),
+      svgRight: svgBounds.right,
+      svgBottom: svgBounds.bottom,
+      finalBarlineCount: barlines.length,
+    };
+  });
+}
+
+for (const showFinalBarline of [true, false]) {
+  test(`repeat count renders after the final ${showFinalBarline ? "barline" : "staff end"}`, async ({
+    page,
+  }) => {
+    await page.goto("/tests/browser/fixture.html");
+    const musicXml = await page.evaluate(
+      ({ visible }) => window.renderRepeatFixture("bar", 3, visible),
+      { visible: showFinalBarline },
+    );
+    const svg = page.locator("#target svg");
+
+    await expect(svg.locator("g[data-dbz-repeat-label] > text")).toHaveText("x3");
+    await expect(svg.locator("g[data-dbz-repeat-label]")).toHaveCount(1);
+    expect(musicXml).not.toContain("x3");
+    expect(musicXml).not.toContain("<repeat");
+    const geometry = await repeatLabelGeometry(page);
+    expect(geometry.labelLeft).toBeGreaterThan(geometry.visualEnd);
+    expect(geometry.labelTop).toBeLessThan(geometry.staffBottom);
+    expect(geometry.labelBottom).toBeGreaterThan(geometry.staffBottom);
+    expect(geometry.labelRight).toBeLessThanOrEqual(geometry.svgRight + 0.5);
+    expect(geometry.labelBottom).toBeLessThan(geometry.svgBottom);
+    expect(geometry.finalBarlineCount === 0).toBe(!showFinalBarline);
+  });
+}
+
+test("a repeat count follows the final system of a long phrase", async ({ page }) => {
+  await page.goto("/tests/browser/fixture.html");
+  const musicXml = await page.evaluate(() => window.renderRepeatFixture("phrase", 12));
+  await expect(page.locator("#target svg g[data-dbz-repeat-label] > text")).toHaveText("x12");
+  expect(musicXml).not.toContain("x12");
+  const systems = await staffLineSystems(page);
+  expect(systems.length).toBeGreaterThan(1);
+  const geometry = await repeatLabelGeometry(page);
+  expect(geometry.labelLeft).toBeGreaterThan(geometry.visualEnd);
+  expect(geometry.labelTop).toBeLessThan(geometry.staffBottom);
+  expect(geometry.labelBottom).toBeGreaterThan(geometry.staffBottom);
+});
+
+test("repeat label remains inside a narrow SVG target", async ({ page }) => {
+  await page.goto("/tests/browser/fixture.html");
+  await page.locator("#target").evaluate((target) => {
+    target.style.width = "190px";
+  });
+  await page.evaluate(() => window.renderRepeatFixture("bar", 3));
+
+  const geometry = await repeatLabelGeometry(page);
+  expect(geometry.labelLeft).toBeGreaterThan(geometry.visualEnd);
+  expect(geometry.labelRight).toBeLessThanOrEqual(geometry.svgRight + 0.5);
+});
+
+test("repeat label spacing follows OSMD zoom", async ({ page }) => {
+  await page.goto("/tests/browser/fixture.html");
+  for (const zoom of [0.75, 1.5]) {
+    await page.evaluate(
+      ({ scale }) => window.renderRepeatFixture("bar", 3, true, scale),
+      { scale: zoom },
+    );
+    const geometry = await repeatLabelGeometry(page);
+    expect(geometry.labelLeft).toBeGreaterThan(geometry.visualEnd);
+    expect(geometry.labelTop).toBeLessThan(geometry.staffBottom);
+    expect(geometry.labelBottom).toBeGreaterThan(geometry.staffBottom);
+    expect(geometry.labelRight).toBeLessThanOrEqual(geometry.svgRight + 0.5);
+  }
+});
+
+test("invalid repeat counts fail before OSMD publishes an SVG", async ({ page }) => {
+  await page.goto("/tests/browser/fixture.html");
+  const result = await page.evaluate(async () => {
+    try {
+      await window.renderRepeatFixture("bar", 1);
+      return { code: undefined, hasSvg: true };
+    } catch (error) {
+      return {
+        code: error instanceof Error && "code" in error ? error.code : undefined,
+        hasSvg: document.querySelector("#target svg") !== null,
+      };
+    }
+  });
+  expect(result).toEqual({ code: "RENDER_OPTIONS_INVALID", hasSvg: false });
+});
+
+test("a position-anchored comment renders from MusicXML words", async ({ page }) => {
+  await page.goto("/tests/browser/fixture.html");
+  const musicXml = await page.evaluate(() => window.renderAnnotationFixture());
+
+  expect(musicXml).toContain("<words>Lyrics starts</words>");
+  expect(musicXml).toContain("<offset>0</offset>");
+  await expect(page.locator("#target svg").getByText("Lyrics starts").first()).toBeVisible();
+});
+
 for (const fixture of [
   "straight",
   "chord",
@@ -223,6 +361,14 @@ for (const fixture of [
 test("straight groove visual geometry is stable", async ({ page }) => {
   await renderFixture(page, "straight");
   await expect(page.locator("#target")).toHaveScreenshot("straight-score.png", {
+    animations: "disabled",
+  });
+});
+
+test("repeat count visual geometry is stable", async ({ page }) => {
+  await page.goto("/tests/browser/fixture.html");
+  await page.evaluate(() => window.renderRepeatFixture("bar", 3));
+  await expect(page.locator("#target")).toHaveScreenshot("repeat-count-score.png", {
     animations: "disabled",
   });
 });

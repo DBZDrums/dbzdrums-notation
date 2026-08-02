@@ -60,6 +60,64 @@ test("the playground controls score markings in its preview, XML, and API exampl
   expect(finalBarlineRectCount).toBe(0);
 });
 
+test("the playground previews a render-only repeat count", async ({ page }) => {
+  await page.goto("/");
+
+  await page.locator("#repeat-count").fill("3");
+  await page.locator("#repeat-count").blur();
+  await expect(page.locator("#status")).toContainText("Score updated.");
+  await expect(page.locator("#target svg g[data-dbz-repeat-label] > text")).toHaveText("x3");
+  await expect(page.locator("#api-code")).toContainText('"repeatCount": 3');
+  await expect(page.locator("#musicxml")).not.toContainText("x3");
+
+  await page.locator("#show-final-barline").uncheck();
+  await expect(page.locator("#target svg g[data-dbz-repeat-label] > text")).toHaveText("x3");
+
+  await page.locator("#repeat-count").fill("");
+  await page.locator("#repeat-count").blur();
+  await expect(page.locator("#target svg g[data-dbz-repeat-label]")).toHaveCount(0);
+  await expect(page.locator("#api-code")).not.toContainText("repeatCount");
+});
+
+test("the playground validates repeat count and accepts comments through JSON", async ({ page }) => {
+  await page.goto("/");
+
+  await page.locator("#repeat-count").fill("1");
+  await page.locator("#repeat-count").blur();
+  await expect(page.locator("#status")).toContainText("Repeat count must be a whole number of 2 or greater.");
+  await expect(page.locator("#issues")).toContainText("Enter a repeat count of 2 or greater");
+
+  await page.locator("#definition").fill(JSON.stringify({
+    meter: "4/4",
+    divisions: 8,
+    hits: { snare: ["1.0"] },
+    annotations: [{ at: "1.0", text: "Lyrics starts", placement: "below" }],
+  }, null, 2));
+  await page.locator("#apply-definition").click();
+
+  await expect(page.locator("#musicxml")).toContainText("<words>Lyrics starts</words>");
+  await expect(page.locator("#target svg").getByText("Lyrics starts").first()).toBeVisible();
+  await expect(page.locator("#definition")).toHaveValue(/"annotations"/);
+});
+
+test("the playground keeps phrase comment targets aligned during structural edits", async ({ page }) => {
+  await page.goto("/");
+  await page.locator("#definition").fill(JSON.stringify({
+    bars: [
+      { meter: "4/4", divisions: 8 },
+      { meter: "4/4", divisions: 8 },
+    ],
+    annotations: [{ bar: 1, at: "1.0", text: "Second bar" }],
+  }, null, 2));
+  await page.locator("#apply-definition").click();
+
+  await page.getByRole("button", { name: "Duplicate bar" }).click();
+  await expect(page.locator("#definition")).toHaveValue(/"bar": 2/);
+  await page.getByRole("button", { name: "Remove bar" }).click();
+  await expect(page.locator("#definition")).toHaveValue(/"bar": 1/);
+  await expect(page.locator("#musicxml")).toContainText("<words>Second bar</words>");
+});
+
 test("the playground builds a phrase with add, duplicate, and remove", async ({ page }) => {
   await page.goto("/");
 

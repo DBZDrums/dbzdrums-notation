@@ -3,6 +3,7 @@ import { NotationCompilationError } from "./errors.js";
 import { Phrase } from "./phrase.js";
 import type {
   BarEvent,
+  BarTextAnnotation,
   CompilationDiagnostic,
   DrumKit,
   MusicXmlCompileOptions,
@@ -363,6 +364,25 @@ function restXml(timing: string): string {
   return `<note><rest/>${timing}<staff>1</staff></note>`;
 }
 
+function annotationSlot(bar: Bar<any>, annotation: BarTextAnnotation): number {
+  const [unit, subdivision] = annotation.at.split(".").map(Number) as [number, number];
+  return (unit - 1) * bar.timing.subdivisionsPerUnit + subdivision;
+}
+
+function textAnnotationXml(
+  bar: Bar<any>,
+  annotation: BarTextAnnotation,
+  slotDuration: number,
+): string {
+  return [
+    `<direction placement="${annotation.placement ?? "below"}">`,
+    `<direction-type><words>${escapeXml(annotation.text)}</words></direction-type>`,
+    `<offset>${annotationSlot(bar, annotation) * slotDuration}</offset>`,
+    "<staff>1</staff>",
+    "</direction>",
+  ].join("");
+}
+
 type NotationInput = Bar<any> | Phrase<any>;
 
 function barsFor(input: NotationInput): readonly Bar<any>[] {
@@ -414,6 +434,7 @@ function measureXml(
   previous: Bar<any> | undefined,
   final: boolean,
   presentation: ResolvedScorePresentationOptions,
+  annotations: readonly BarTextAnnotation[],
   diagnostics: CompilationDiagnostic[],
   diagnosticPrefix: string,
 ): string {
@@ -434,7 +455,13 @@ function measureXml(
     return notation;
   });
   const segmentTypes = segmentNotations.map((notation) => notation.typeDenominator);
-  const measure = [attributesXml(bar, previous, presentation)];
+  const sortedAnnotations = annotations
+    .map((annotation, order) => ({ annotation, order, slot: annotationSlot(bar, annotation) }))
+    .sort((left, right) => left.slot - right.slot || left.order - right.order);
+  const measure = [
+    attributesXml(bar, previous, presentation),
+    ...sortedAnnotations.map(({ annotation }) => textAnnotationXml(bar, annotation, slotDuration)),
+  ];
 
   for (const [index, segment] of segments.entries()) {
     const notation = segmentNotations[index]!;
@@ -493,6 +520,14 @@ export function compileMusicXml(
       bars[index - 1],
       index === bars.length - 1,
       presentation,
+      [
+        ...bar.annotations,
+        ...(input instanceof Phrase
+          ? input.annotations
+              .filter((annotation) => annotation.bar === index)
+              .map(({ bar: _bar, ...annotation }) => annotation)
+          : []),
+      ],
       diagnostics,
       input instanceof Phrase ? `bars[${index}].` : "",
     ),

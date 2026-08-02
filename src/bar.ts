@@ -4,6 +4,7 @@ import type {
   ArticulationId,
   BarDefinition,
   BarEvent,
+  BarTextAnnotation,
   DrumKit,
   HitInput,
   Meter,
@@ -12,13 +13,23 @@ import type {
   ValidationCode,
   VoiceId,
 } from "./types.js";
-import { isIssue, parseMeter, parsePosition, type ParsedMeter } from "./validation.js";
+import {
+  isIssue,
+  parseMeter,
+  parsePosition,
+  parseTextAnnotation,
+  type ParsedMeter,
+} from "./validation.js";
 
 function freezeEvent(event: BarEvent): BarEvent {
   return Object.freeze({
     ...event,
     articulations: Object.freeze([...event.articulations]),
   });
+}
+
+function freezeAnnotation(annotation: BarTextAnnotation): BarTextAnnotation {
+  return Object.freeze({ ...annotation });
 }
 
 function copyGrouping(grouping: readonly number[] | undefined): readonly number[] | undefined {
@@ -102,6 +113,7 @@ export class Bar<K extends DrumKit = typeof standardDrumKit> {
   readonly grouping: readonly number[] | undefined;
   readonly kit: K;
   readonly events: readonly BarEvent[];
+  readonly annotations: readonly BarTextAnnotation[];
   readonly timing: BarTiming;
 
   constructor(definition: BarDefinition<K>) {
@@ -153,6 +165,51 @@ export class Bar<K extends DrumKit = typeof standardDrumKit> {
           message: "Grouping must contain positive integers that sum to the meter numerator.",
           path: "grouping",
         });
+      }
+    }
+
+    const annotations: BarTextAnnotation[] = [];
+    const seenAnnotations = new Set<string>();
+    if (definition.annotations !== undefined && !Array.isArray(definition.annotations)) {
+      issues.push({
+        code: "INVALID_ANNOTATION",
+        message: "Bar annotations must be an array.",
+        path: "annotations",
+      });
+    } else {
+      for (const [index, input] of (definition.annotations ?? []).entries()) {
+        const path = `annotations[${index}]`;
+        const parsed = parseTextAnnotation(input, path);
+        issues.push(...parsed.issues);
+        if (!parsed.annotation) continue;
+        if (
+          meter === undefined ||
+          subdivisionsPerUnit < 1 ||
+          parsed.annotation.unit > meter.numerator ||
+          parsed.annotation.subdivision >= subdivisionsPerUnit
+        ) {
+          issues.push({
+            code: "POSITION_OUT_OF_RANGE",
+            message: `Position '${parsed.annotation.at}' is outside the bar grid.`,
+            path: `${path}.at`,
+          });
+          continue;
+        }
+        const duplicateKey = `${parsed.annotation.at}\u0000${parsed.annotation.placement}`;
+        if (seenAnnotations.has(duplicateKey)) {
+          issues.push({
+            code: "DUPLICATE_ANNOTATION",
+            message: `A '${parsed.annotation.placement}' annotation already exists at '${parsed.annotation.at}'.`,
+            path,
+          });
+          continue;
+        }
+        seenAnnotations.add(duplicateKey);
+        annotations.push(freezeAnnotation({
+          at: parsed.annotation.at,
+          text: parsed.annotation.text,
+          placement: parsed.annotation.placement,
+        }));
       }
     }
 
@@ -233,6 +290,7 @@ export class Bar<K extends DrumKit = typeof standardDrumKit> {
     this.grouping = grouping;
     this.kit = kit;
     this.events = Object.freeze(events);
+    this.annotations = Object.freeze(annotations);
     this.timing = Object.freeze({
       numerator: meter.numerator,
       denominator: meter.denominator,
@@ -258,6 +316,7 @@ export class Bar<K extends DrumKit = typeof standardDrumKit> {
       ...(this.grouping ? { grouping: this.grouping } : {}),
       kit: this.kit,
       hits: hitsWithAddition,
+      annotations: this.annotations,
     });
   }
 

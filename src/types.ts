@@ -6,6 +6,7 @@ export type Meter = `${number}/${number}`;
 
 export type Notehead = "normal" | "x" | "circle-x";
 export type StemDirection = "up" | "down";
+export type TextPlacement = "above" | "below";
 export type ArticulationRole = "primary" | "modifier";
 export type ArticulationRender = "base" | "grace" | "unsupported";
 
@@ -60,17 +61,34 @@ export type HitMap<K extends DrumKit> = Partial<{
   readonly [V in VoiceId<K>]: readonly HitInput<ArticulationId<K, V>>[];
 }>;
 
+/** Text attached to one rhythmic position in a bar. */
+export interface BarTextAnnotation {
+  readonly at: Position;
+  readonly text: string;
+  /** Defaults to below the staff. */
+  readonly placement?: TextPlacement;
+}
+
+/** Text attached to one specific bar occurrence in a phrase. */
+export interface PhraseTextAnnotation extends BarTextAnnotation {
+  /** Zero-based index into PhraseDefinition.bars. */
+  readonly bar: number;
+}
+
 export interface BarDefinition<K extends DrumKit = DrumKit> {
   readonly meter: Meter;
   readonly divisions: number;
   readonly grouping?: readonly number[];
   readonly kit?: K;
   readonly hits?: HitMap<K>;
+  readonly annotations?: readonly BarTextAnnotation[];
 }
 
 /** An ordered, non-empty sequence of bars that shares one drum kit. */
 export interface PhraseDefinition<K extends DrumKit = DrumKit> {
   readonly bars: readonly import("./bar.js").Bar<K>[];
+  /** Occurrence-specific annotations; annotations on a Bar remain attached to every occurrence. */
+  readonly annotations?: readonly PhraseTextAnnotation[];
 }
 
 export interface BarEvent {
@@ -96,7 +114,9 @@ export type ValidationCode =
   | "INVALID_KIT"
   | "INVALID_PHRASE"
   | "EMPTY_PHRASE"
-  | "MIXED_KITS";
+  | "MIXED_KITS"
+  | "INVALID_ANNOTATION"
+  | "DUPLICATE_ANNOTATION";
 
 export type CompilationCode =
   | "UNSUPPORTED_ARTICULATION_RENDERING"
@@ -104,9 +124,11 @@ export type CompilationCode =
 
 export type RenderCode =
   | "RENDER_TARGET_INVALID"
+  | "RENDER_OPTIONS_INVALID"
   | "RENDER_ABORTED"
   | "OSMD_RENDER_FAILED"
-  | "STAFF_LINE_COUNT_INVALID";
+  | "STAFF_LINE_COUNT_INVALID"
+  | "REPEAT_LABEL_RENDER_FAILED";
 
 export interface NotationIssue<C extends string = string> {
   readonly code: C;
@@ -140,6 +162,8 @@ export interface MusicXmlCompileResult {
 export interface RenderOptions extends MusicXmlCompileOptions {
   /** OSMD scale; defaults to 1. */
   readonly zoom?: number;
+  /** Total visual play count. Integers from 2 upward render as `xN` in SVG only. */
+  readonly repeatCount?: number;
   /** Optional cooperative cancellation signal for browser rendering. */
   readonly signal?: AbortSignal;
 }

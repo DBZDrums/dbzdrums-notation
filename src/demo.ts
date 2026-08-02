@@ -10,9 +10,12 @@ import {
 } from "./index.js";
 import type {
   BarDefinition,
+  BarTextAnnotation,
   HitInput,
   Meter,
+  PhraseTextAnnotation,
   Position,
+  RenderOptions,
   ScorePresentationOptions,
 } from "./types.js";
 
@@ -28,11 +31,17 @@ interface DemoBarState {
   divisions: number;
   grouping: string;
   hits: DemoHits;
+  annotations: readonly BarTextAnnotation[];
 }
 
 type DemoState =
   | { readonly kind: "bar"; readonly bar: DemoBarState }
-  | { readonly kind: "phrase"; readonly bars: readonly DemoBarState[]; readonly activeBarIndex: number };
+  | {
+      readonly kind: "phrase";
+      readonly bars: readonly DemoBarState[];
+      readonly annotations: readonly PhraseTextAnnotation[];
+      readonly activeBarIndex: number;
+    };
 
 declare global {
   interface Window {
@@ -63,6 +72,7 @@ const removeBarButton = requiredElement<HTMLButtonElement>("remove-bar");
 const showClefInput = requiredElement<HTMLInputElement>("show-clef");
 const showTimeSignatureInput = requiredElement<HTMLInputElement>("show-time-signature");
 const showFinalBarlineInput = requiredElement<HTMLInputElement>("show-final-barline");
+const repeatCountInput = requiredElement<HTMLInputElement>("repeat-count");
 const definitionHeading = requiredElement<HTMLHeadingElement>("definition-heading");
 const definitionDescription = requiredElement<HTMLParagraphElement>("definition-description");
 
@@ -75,6 +85,7 @@ let presentation: ResolvedPresentationOptions = {
   showTimeSignature: true,
   showFinalBarline: true,
 };
+let repeatCount: number | undefined;
 let latestMusicXml = "";
 let currentDispose: (() => void) | undefined;
 let renderQueue: Promise<void> = Promise.resolve();
@@ -97,6 +108,7 @@ function preset(name: FixtureName): DemoBarState {
           snare: ["2.0", "4.0"],
           hiHat: ["1.0", "1.1", "2.0", "2.1", "3.0", "3.1", "4.0", "4.1"],
         },
+        annotations: [],
       };
     case "chord":
       return {
@@ -109,6 +121,7 @@ function preset(name: FixtureName): DemoBarState {
           crash: ["1.0"],
           hiHat: ["2.0", "3.0", "4.0"],
         },
+        annotations: [],
       };
     case "compound":
       return {
@@ -120,6 +133,7 @@ function preset(name: FixtureName): DemoBarState {
           snare: ["3.0", "6.0"],
           hiHat: ["1.0", "2.0", "3.0", "4.0", "5.0", "6.0"],
         },
+        annotations: [],
       };
     case "triplet":
       return {
@@ -131,6 +145,7 @@ function preset(name: FixtureName): DemoBarState {
           snare: ["2.0", "4.0"],
           hiHat: ["1.0", "1.1", "1.2", "2.0", "2.1", "2.2", "3.0", "3.1", "3.2", "4.0", "4.1", "4.2"],
         },
+        annotations: [],
       };
     case "quarterGrid":
       return {
@@ -142,6 +157,7 @@ function preset(name: FixtureName): DemoBarState {
           snare: ["2.0", "4.0"],
           hiHat: ["1.0", "2.0", "3.0", "4.0"],
         },
+        annotations: [],
       };
     case "articulations":
       return {
@@ -152,6 +168,7 @@ function preset(name: FixtureName): DemoBarState {
           snare: [{ at: "2.0", articulations: ["flam"] }, { at: "4.0", articulations: ["rim"] }],
           hiHat: [{ at: "1.0", articulations: ["open"] }, { at: "3.0", articulations: ["pedal"] }],
         },
+        annotations: [],
       };
   }
 }
@@ -168,7 +185,11 @@ function cloneHits(hits: DemoHits): DemoHits {
 }
 
 function cloneBarState(source: DemoBarState): DemoBarState {
-  return { ...source, hits: cloneHits(source.hits) };
+  return {
+    ...source,
+    hits: cloneHits(source.hits),
+    annotations: source.annotations.map((annotation) => ({ ...annotation })),
+  };
 }
 
 function activeBarState(): DemoBarState {
@@ -188,6 +209,7 @@ function updateActiveBar(update: (bar: DemoBarState) => DemoBarState): void {
   state = {
     kind: "phrase",
     bars: currentState.bars.map((bar, index) => index === currentState.activeBarIndex ? update(bar) : bar),
+    annotations: currentState.annotations,
     activeBarIndex: currentState.activeBarIndex,
   };
 }
@@ -198,6 +220,7 @@ function newEmptyBarLike(source: DemoBarState): DemoBarState {
     divisions: source.divisions,
     grouping: source.grouping,
     hits: {},
+    annotations: [],
   };
 }
 
@@ -237,12 +260,21 @@ function definitionFor(source: DemoBarState): BarDefinition {
     divisions: source.divisions,
     ...(grouping === undefined ? {} : { grouping }),
     hits: source.hits,
+    ...(source.annotations.length === 0 ? {} : { annotations: source.annotations }),
   };
 }
 
-function definitionForState(source: DemoState): BarDefinition | { readonly bars: readonly BarDefinition[] } {
+interface DemoPhraseDefinition {
+  readonly bars: readonly BarDefinition[];
+  readonly annotations?: readonly PhraseTextAnnotation[];
+}
+
+function definitionForState(source: DemoState): BarDefinition | DemoPhraseDefinition {
   if (source.kind === "bar") return definitionFor(source.bar);
-  return { bars: source.bars.map((bar) => definitionFor(bar)) };
+  return {
+    bars: source.bars.map((bar) => definitionFor(bar)),
+    ...(source.annotations.length === 0 ? {} : { annotations: source.annotations }),
+  };
 }
 
 function techniqueKey(articulations: readonly string[]): string {
@@ -404,57 +436,70 @@ function toggleHit(voiceId: string, position: Position): void {
   void enqueueRender();
 }
 
-function presentationForCode(): ScorePresentationOptions | undefined {
-  if (presentation.showClef && presentation.showTimeSignature && presentation.showFinalBarline) {
-    return undefined;
-  }
-  return presentation;
+type DemoRenderOptions = Pick<RenderOptions, "presentation" | "repeatCount">;
+
+function renderOptionsForCode(): DemoRenderOptions | undefined {
+  const presentationOptions =
+    presentation.showClef && presentation.showTimeSignature && presentation.showFinalBarline
+      ? undefined
+      : presentation;
+  if (!presentationOptions && repeatCount === undefined) return undefined;
+  return {
+    ...(presentationOptions ? { presentation: presentationOptions } : {}),
+    ...(repeatCount === undefined ? {} : { repeatCount }),
+  };
 }
 
 function codeFor(
   definition: BarDefinition,
-  presentationOptions: ScorePresentationOptions | undefined,
+  renderOptions: DemoRenderOptions | undefined,
 ): string {
   const code = [
     'import { Bar, renderBarToSvg } from "@dbzdrums/notation";',
     "",
     `const bar = new Bar(${JSON.stringify(definition, null, 2)});`,
   ];
-  if (presentationOptions) {
-    code.push("", `const presentation = ${JSON.stringify(presentationOptions, null, 2)};`);
+  if (renderOptions) {
+    code.push("", `const renderOptions = ${JSON.stringify(renderOptions, null, 2)};`);
   }
   code.push(
     "",
     'const chart = document.querySelector<HTMLElement>("#chart");',
     "if (!chart) throw new Error(\"Missing chart target.\");",
     `const { musicXml, svg, dispose } = await renderBarToSvg(bar, chart${
-      presentationOptions ? ", { presentation }" : ""
+      renderOptions ? ", renderOptions" : ""
     });`,
   );
   return code.join("\n");
 }
 
 function codeForPhrase(
-  definitions: readonly BarDefinition[],
-  presentationOptions: ScorePresentationOptions | undefined,
+  definition: DemoPhraseDefinition,
+  renderOptions: DemoRenderOptions | undefined,
 ): string {
+  const phraseDefinition = definition.annotations
+    ? `{
+  bars,
+  annotations: ${JSON.stringify(definition.annotations, null, 2).replaceAll("\n", "\n  ")},
+}`
+    : "{ bars }";
   const code = [
     'import { Bar, Phrase, renderPhraseToSvg } from "@dbzdrums/notation";',
     "",
     "const bars = [",
-    ...definitions.map((definition) => `  new Bar(${JSON.stringify(definition, null, 2).replaceAll("\n", "\n  ")}),`),
+    ...definition.bars.map((bar) => `  new Bar(${JSON.stringify(bar, null, 2).replaceAll("\n", "\n  ")}),`),
     "];",
-    "const phrase = new Phrase({ bars });",
+    `const phrase = new Phrase(${phraseDefinition});`,
   ];
-  if (presentationOptions) {
-    code.push("", `const presentation = ${JSON.stringify(presentationOptions, null, 2)};`);
+  if (renderOptions) {
+    code.push("", `const renderOptions = ${JSON.stringify(renderOptions, null, 2)};`);
   }
   code.push(
     "",
     'const chart = document.querySelector<HTMLElement>("#chart");',
     "if (!chart) throw new Error(\"Missing chart target.\");",
     `const { musicXml, svg, dispose } = await renderPhraseToSvg(phrase, chart${
-      presentationOptions ? ", { presentation }" : ""
+      renderOptions ? ", renderOptions" : ""
     });`,
   );
   return code.join("\n");
@@ -499,10 +544,10 @@ function syncInterface(options: { readonly updateDefinition?: boolean } = {}): v
   groupingInput.value = activeBar.grouping;
   const definition = definitionForState(state);
   if (options.updateDefinition ?? true) definitionInput.value = JSON.stringify(definition, null, 2);
-  const presentationOptions = presentationForCode();
+  const renderOptions = renderOptionsForCode();
   apiCode.textContent = state.kind === "bar"
-    ? codeFor(definitionFor(state.bar), presentationOptions)
-    : codeForPhrase(state.bars.map((bar) => definitionFor(bar)), presentationOptions);
+    ? codeFor(definitionFor(state.bar), renderOptions)
+    : codeForPhrase(definition as DemoPhraseDefinition, renderOptions);
   definitionHeading.textContent = state.kind === "bar" ? "5. Edit the bar definition" : "5. Edit the phrase definition";
   definitionDescription.innerHTML = state.kind === "bar"
     ? "the same data passed to <code>new Bar(...)</code>"
@@ -511,6 +556,7 @@ function syncInterface(options: { readonly updateDefinition?: boolean } = {}): v
   showClefInput.checked = presentation.showClef;
   showTimeSignatureInput.checked = presentation.showTimeSignature;
   showFinalBarlineInput.checked = presentation.showFinalBarline;
+  repeatCountInput.value = repeatCount === undefined ? "" : String(repeatCount);
   for (const button of document.querySelectorAll<HTMLButtonElement>("[data-preset]")) {
     button.setAttribute("aria-pressed", String(button.dataset.preset === activePreset));
   }
@@ -555,12 +601,18 @@ function enqueueRender(): Promise<string | undefined> {
     setStatus("Updating score…");
     try {
       const bars = barsInState().map((barState) => new Bar(definitionFor(barState)));
-      const notation = state.kind === "phrase" ? new Phrase({ bars }) : bars[0]!;
+      const notation = state.kind === "phrase"
+        ? new Phrase({ bars, annotations: state.annotations })
+        : bars[0]!;
+      const renderOptions: RenderOptions = {
+        presentation,
+        ...(repeatCount === undefined ? {} : { repeatCount }),
+      };
       currentDispose?.();
       currentDispose = undefined;
       const result = notation instanceof Phrase
-        ? await renderPhraseToSvg(notation, target, { presentation })
-        : await renderBarToSvg(notation, target, { presentation });
+        ? await renderPhraseToSvg(notation, target, renderOptions)
+        : await renderBarToSvg(notation, target, renderOptions);
       currentDispose = result.dispose;
       latestMusicXml = result.musicXml;
       musicXmlOutput.textContent = latestMusicXml;
@@ -601,6 +653,7 @@ function barStateFromBar(bar: Bar<any>): DemoBarState {
     divisions: bar.divisions,
     grouping: bar.grouping?.join(", ") ?? "",
     hits,
+    annotations: bar.annotations.map((annotation) => ({ ...annotation })),
   };
 }
 
@@ -625,8 +678,18 @@ function stateFromDefinition(value: unknown): DemoState {
       }
       return new Bar(barDefinition as BarDefinition);
     });
-    new Phrase({ bars });
-    return { kind: "phrase", bars: bars.map(barStateFromBar), activeBarIndex: 0 };
+    const phrase = new Phrase({
+      bars,
+      ...(definition.annotations === undefined
+        ? {}
+        : { annotations: definition.annotations as readonly PhraseTextAnnotation[] }),
+    });
+    return {
+      kind: "phrase",
+      bars: bars.map(barStateFromBar),
+      annotations: phrase.annotations.map((annotation) => ({ ...annotation })),
+      activeBarIndex: 0,
+    };
   }
   return { kind: "bar", bar: barStateFromBar(new Bar(definition as unknown as BarDefinition)) };
 }
@@ -639,6 +702,7 @@ function setPreset(name: PresetName): void {
         cloneBarState(preset("straight")),
         cloneBarState(preset("chord")),
       ],
+      annotations: [],
       activeBarIndex: 0,
     };
   } else if (name === "mixedMeterPhrase") {
@@ -648,6 +712,7 @@ function setPreset(name: PresetName): void {
         cloneBarState(preset("straight")),
         cloneBarState(preset("compound")),
       ],
+      annotations: [],
       activeBarIndex: 0,
     };
   } else {
@@ -677,6 +742,23 @@ for (const input of [showClefInput, showTimeSignatureInput, showFinalBarlineInpu
   input.addEventListener("change", updatePresentation);
 }
 
+repeatCountInput.addEventListener("change", () => {
+  const value = repeatCountInput.value.trim();
+  if (value === "") {
+    repeatCount = undefined;
+  } else {
+    const parsed = Number(value);
+    if (!Number.isSafeInteger(parsed) || parsed < 2) {
+      setStatus("Repeat count must be a whole number of 2 or greater.", "error");
+      showError(new Error("Enter a repeat count of 2 or greater, or leave the field empty."));
+      return;
+    }
+    repeatCount = parsed;
+  }
+  syncInterface({ updateDefinition: false });
+  void enqueueRender();
+});
+
 function updatePhraseStructure(next: DemoState): void {
   state = next;
   activePreset = undefined;
@@ -690,6 +772,7 @@ addBarButton.addEventListener("click", () => {
     updatePhraseStructure({
       kind: "phrase",
       bars: [cloneBarState(activeBar), newEmptyBarLike(activeBar)],
+      annotations: [],
       activeBarIndex: 1,
     });
     return;
@@ -697,6 +780,7 @@ addBarButton.addEventListener("click", () => {
   updatePhraseStructure({
     kind: "phrase",
     bars: [...state.bars, newEmptyBarLike(activeBar)],
+    annotations: state.annotations,
     activeBarIndex: state.bars.length,
   });
 });
@@ -708,6 +792,7 @@ duplicateBarButton.addEventListener("click", () => {
     updatePhraseStructure({
       kind: "phrase",
       bars: [cloneBarState(activeBar), cloneBarState(activeBar)],
+      annotations: [],
       activeBarIndex: 1,
     });
     return;
@@ -720,6 +805,10 @@ duplicateBarButton.addEventListener("click", () => {
       cloneBarState(activeBar),
       ...currentState.bars.slice(insertionIndex),
     ],
+    annotations: currentState.annotations.map((annotation) => ({
+      ...annotation,
+      bar: annotation.bar >= insertionIndex ? annotation.bar + 1 : annotation.bar,
+    })),
     activeBarIndex: insertionIndex,
   });
 });
@@ -731,6 +820,12 @@ removeBarButton.addEventListener("click", () => {
   updatePhraseStructure({
     kind: "phrase",
     bars: remaining,
+    annotations: currentState.annotations
+      .filter((annotation) => annotation.bar !== currentState.activeBarIndex)
+      .map((annotation) => ({
+        ...annotation,
+        bar: annotation.bar > currentState.activeBarIndex ? annotation.bar - 1 : annotation.bar,
+      })),
     activeBarIndex: Math.min(currentState.activeBarIndex, remaining.length - 1),
   });
 });
@@ -798,6 +893,7 @@ window.renderNotationFixture = async (name: RenderFixtureName): Promise<string> 
         bars: Array.from({ length: 8 }, (_, index) =>
           cloneBarState(preset(index % 2 === 0 ? "straight" : "chord")),
         ),
+        annotations: [],
         activeBarIndex: 0,
       }
     : { kind: "bar", bar: cloneBarState(preset(name)) };
